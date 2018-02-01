@@ -2,11 +2,11 @@
 # coding: utf-8
 
 # In[45]:
-
-get_ipython().magic(u'matplotlib inline')
 import numpy as np
 import sympy as sp
 import scipy as sc
+import matplotlib
+matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 from ipywidgets import interact, fixed
 
@@ -92,7 +92,7 @@ c += 0.40831
 phi += 1
 diamondParam = 100
 for i in range(diamondParam):
-    phi[(res/2-i):(res/2+i), (res/2-(diamondParam-i)):(res/2+(diamondParam-i))] = 0
+    phi[int(res/2-i):int(res/2+i), int(res/2-(diamondParam-i)):int(res/2+(diamondParam-i))] = 0
 
 
 #print(z)
@@ -164,7 +164,7 @@ for i in range(2001):
 
 # In[10]:
 
-plt.imshow(phi)
+#plt.imshow(phi)
 
 
 # In[ ]:
