@@ -10,6 +10,9 @@
 #include "update.cpp"
 
 int main(int argc, char* argv[]){
+	#ifdef MPI_VERSION
+	MPI::Init();
+	#endif
 	int dim=MMSP::read_dim(argc,argv);
 	
 

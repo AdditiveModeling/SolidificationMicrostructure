@@ -27,12 +27,21 @@ template <int dim, typename T> void update(grid<dim,vector<T> >& oldGrid, int st
 	double      k1=0.9;
 	double      k2=20.;
 	double   DiffT=2.25;    // thermal diffusivity
-	double     CFL=tau/(2*alpha*alpha*(1./pow(dx(oldGrid,0),2)+1./pow(dx(oldGrid,1),2))); // Courant-Friedrich-Lewy condition on dt
+	double	   dx_list [3] = {1./pow(dx(oldGrid,0),2),1./pow(dx(oldGrid,1),2),0.}; //array of values to find CFL
+	if (dim==3){
+		dx_list[2]=1./pow(dx(oldGrid,2),2);
+	}
+	double     CFL=tau/(2*alpha*alpha*(dx_list[0]+dx_list[1]+dx_list[2])); // Courant-Friedrich-Lewy condition on dt
 	
 
-	if (dt>0.5*CFL) {
+	if (dt>0.5*CFL && dim==2) {
 		if (id==0) std::cout<<"dt="<<dt<<" is unstable; reduced to ";
 		while (dt>0.5*CFL) dt*=3./4;
+		if (id==0) std::cout<<dt<<"."<<std::endl;
+	}
+	else if (dt>0.3333*CFL && dim==3){
+		if (id==0) std::cout<<"dt="<<dt<<" is unstable; reduced to ";
+		while (dt>0.3333*CFL) dt*=3./4;
 		if (id==0) std::cout<<dt<<"."<<std::endl;
 	}
 
