@@ -1,19 +1,19 @@
 
 # coding: utf-8
 
-# In[45]:
+# In[3]:
 import numpy as np
 import sympy as sp
 import scipy as sc
 import matplotlib
+import os
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 from ipywidgets import interact, fixed
 
 
-# In[46]:
+# In[4]:
 
-#data fields, will need to be replaced with a text document input for better usage
 def __p(phi):
     return phi*phi*phi*(10-15*phi+6*phi*phi)
 
@@ -48,32 +48,30 @@ def gradyy(phi, dx):
     return (phip+phim-2*phi)/(dx*dx)
 
 
-# In[50]:
+# In[5]:
 
 #material parameters
 T_mA = 1728 #melting point of nickel
 T_mB = 1358 #melting point of copper
-L_A = 2.35e9 #latent heat of nickel, J/m^3
-L_B = 1.728e9 #latent heat of copper, J/m^3
-s_A = 0.37 #surface energy of nickel, J/m^2
-s_B = 0.29 #surface energy of copper, J/m^2
-#s_A = 0.0005 #surface energy of nickel, J/m^2
-#s_B = 0.0005 #surface energy of copper, J/m^2
-D_L = 1e-9 #diffusion in liquid, m^2/s
-D_S = 1e-13 #diffusion in solid, m^2/s
-B_A = 0.0033 #linear kinetic coefficient of nickel, m/K/s
-B_B = 0.0039 #linear kinetic coefficient of copper, m/K/s
-v_m = 7.42e-6 #molar volume, m^3/mol
+L_A = 2350. #latent heat of nickel, J/cm^3
+L_B = 1728. #latent heat of copper, J/cm^3
+s_A = 3.7e-5 #surface energy of nickel, J/cm^2
+s_B = 2.9e-5 #surface energy of copper, J/cm^2
+D_L = 1e-5 #diffusion in liquid, cm^2/s
+D_S = 1e-9 #diffusion in solid, cm^2/s
+B_A = 0.33 #linear kinetic coefficient of nickel, cm/K/s
+B_B = 0.39 #linear kinetic coefficient of copper, cm/K/s
+v_m = 7.42 #molar volume, cm^3/mol
 R = 8.314 #gas constant, J/mol*K
 y_e = 0.06 #anisotropy
 
 
-# In[51]:
+# In[1]:
 
 np.set_printoptions(threshold=np.inf)
 T = 1574
 res = 300
-dx = 4.6e-8 #spacial division, m
+dx = 4.6e-6 #spacial division, cm
 dt = dx*dx/5./D_L
 print(dt)
 d = dx/0.94 #interfacial thickness
@@ -88,21 +86,17 @@ ebar = np.sqrt(6*np.sqrt(2)*s_A*d/T_mA)
 c = np.zeros((res,res))
 phi = np.zeros((res, res))
 c += 0.40831
-#c += 0.001*np.random.rand(res, res)
 phi += 1
-diamondParam = 100
+diamondParam = 15
 for i in range(diamondParam):
-    phi[int(res/2-i):int(res/2+i), int(res/2-(diamondParam-i)):int(res/2+(diamondParam-i))] = 0
+    phi[(int)(res/2-i):(int)(res/2+i), ((int)(res/2-(diamondParam-i))):(int)(res/2+(diamondParam-i))] = 0
 
-
-#print(z)
-#print(slope)
-#print(curv)
-
-
+if not os.path.isdir('data'):
+    os.makedirs('data')
+	
 # In[52]:
 
-for i in range(2001):
+for i in range(401):
     print(i)
     g = _g(phi)
     p = _p(phi)
@@ -134,37 +128,26 @@ for i in range(2001):
     alpha = 0.3
     deltaphi += M_phi*alpha*randArray*(16*g)*((1-c)*H_A+c*H_B)
     
-    #alternate change in phi
-    #theta = np.arctan2(phiy, phix)
-    #eta = 1+y_e*np.cos(4*theta)
-    #d_A = s_A/L_A
-    #d_B = s_B/L_B
-    #print(d_A, d_B, d)
-    #M_phi = (1-c)*M_A + c*M_B
-    #deltaphi = (M_phi*ebar*ebar*eta*eta/(d*d))*(d*d*lphi-0.25*gprime-(5*g*d/(np.sqrt(2)*d_A))*((1-c)*(T_mA/T-1)+(c*d_A/d_B)*(T_mB/T-1)))
-    
     #apply changes
     ctemp = c.copy()
     c += deltac*dt
     phi += deltaphi*dt
-    #print(ctemp[20, 20], c[20, 20], deltac[20, 20]*dt)
     
     if(i%50 == 0):
         plt.imshow(phi)
-        plt.savefig('100_phi'+str(i)+'.png')
+        plt.savefig('data/phi'+str(i)+'.png')
         plt.imshow(c)
-        plt.savefig('100_c'+str(i)+'.png')
-        print(phi[100, 150])
-        #f = open('rawData_'+str(i)+'.txt','w')
-        #f.write(np.array_str(c))
-        #f.write('\n')
-        #f.write(np.array_str(phi))
-        #f.close()
+        plt.savefig('data/c'+str(i)+'.png')
+        f = open('data/rawData_'+str(i)+'.txt','w')
+        f.write(np.array_str(c))
+        f.write('\n')
+        f.write(np.array_str(phi))
+        f.close()
 
 
-# In[10]:
+# In[2]:
 
-#plt.imshow(phi)
+plt.imshow(phi)
 
 
 # In[ ]:
