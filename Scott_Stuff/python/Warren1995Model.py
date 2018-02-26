@@ -3,8 +3,6 @@
 
 # In[3]:
 import numpy as np
-import sympy as sp
-import scipy as sc
 import matplotlib
 import os
 matplotlib.use('Agg')
