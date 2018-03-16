@@ -3,6 +3,7 @@ namespace MMSP
 
 template <int dim, typename T> void update(grid<dim,vector<T> >& oldGrid, int steps, MMSP::vector<double> T_vector, double step_size)
 {
+	std::cout<<step_size<<"\n";
 	int id = 0;
 	int np = 1;
 	if (steps>T_vector.length()){
@@ -42,6 +43,7 @@ template <int dim, typename T> void update(grid<dim,vector<T> >& oldGrid, int st
 	const double    d = dx(oldGrid,0)/0.94; // interfacial thickness
 	const double  r72 = 6.*sqrt(2); 		//convenience var for 6sqrt(2)
 	const double   dt = step_size;
+	
 	const double ebar = sqrt(r72*s_A*d/T_mA);
 	const double  eb2 = ebar*ebar;
 	const double  W_A = 3*s_A/(sqrt(2)*T_mA*d);
@@ -51,8 +53,10 @@ template <int dim, typename T> void update(grid<dim,vector<T> >& oldGrid, int st
 	
 	std::cout.precision(2);
 	
+	
+	std::cout<<dt<<"\n";
 	std::cout << W_A << ", " << W_B << "\n";
-
+	
 	ghostswap(oldGrid);
 
 	int minus = 0;
@@ -62,6 +66,8 @@ template <int dim, typename T> void update(grid<dim,vector<T> >& oldGrid, int st
 			print_progress(step, steps);
 
 		T_0=T_vector[step];
+		//if (T_0>T_mA) T_0=T_mA-100;
+		//if (T_0<T_mB) T_0=T_mB+100;
 
 		grid<dim,vector<T> > gradphi(oldGrid);
 		grid<dim,vector<T> > gradc(oldGrid);

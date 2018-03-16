@@ -138,12 +138,34 @@ int main(int argc, char* argv[]){
 	}
 	
 	//read T file
-	double step_dt=MMSP::read_step_size("T.txt");
-	MMSP::vector<double> T_vec=MMSP::read_T("T.txt");
+	double step_dt=MMSP::read_step_size("T.csv");
+	MMSP::vector<double> T_vec=MMSP::read_T("T.csv");
+	double dt_find=step_dt;
+	double D_L_stab=1e-5;
+	const double original_step=step_dt;
+	const double original_increment=increment;
 	// perform computation
 	if (dim == 1) {
 			// construct grid object
 			GRID1D grid(argv[1]);
+			const double   dt_max = dx(grid,0)*dx(grid,0)/(500.*D_L_stab);
+			while (dt_find>dt_max){
+				MMSP::vector<double> new_T(2*T_vec.length());
+				for (int k=0; k<new_T.length()-1; k++){
+					if (k%2==0){
+						new_T[k]=T_vec[k/2];
+					}
+					else{
+						new_T[k]=T_vec[(k+1)/2]-T_vec[(k-1)/2];
+					}
+				}
+				T_vec=new_T;
+				dt_find/=2.;
+				steps*=2;
+				increment*=2;
+			}
+
+			double step_dt=dt_find;
 
 			// perform computation
 			for (int i = iterations_start; i < steps; i += increment) {
@@ -170,6 +192,24 @@ int main(int argc, char* argv[]){
 		} else if (dim == 2) {
 			// construct grid object
 			GRID2D grid(argv[1]);
+			const double   dt_max = dx(grid,0)*dx(grid,0)/(500.*D_L_stab);
+			while (dt_find>dt_max){
+				MMSP::vector<double> new_T(2*T_vec.length());
+				for (int k=0; k<new_T.length()-1; k++){
+					if (k%2==0){
+						new_T[k]=T_vec[k/2];
+					}
+					else{
+						new_T[k]=T_vec[(k+1)/2]-T_vec[(k-1)/2];
+					}
+				}
+				T_vec=new_T;
+				dt_find/=2.;
+				steps*=2;
+				increment*=2;
+			}
+
+			double step_dt=dt_find;
 
 			// perform computation
 			for (int i = iterations_start; i < steps; i += increment) {
@@ -196,6 +236,24 @@ int main(int argc, char* argv[]){
 		} else if (dim == 3) {
 			// construct grid object
 			GRID3D grid(argv[1]);
+			const double   dt_max = dx(grid,0)*dx(grid,0)/(500.*D_L_stab);
+			while (dt_find>dt_max){
+				MMSP::vector<double> new_T(2*T_vec.length());
+				for (int k=0; k<new_T.length()-1; k++){
+					if (k%2==0){
+						new_T[k]=T_vec[k/2];
+					}
+					else{
+						new_T[k]=T_vec[(k+1)/2]-T_vec[(k-1)/2];
+					}
+				}
+				T_vec=new_T;
+				dt_find/=2.;
+				steps*=2;
+				increment*=2;
+			}
+
+			double step_dt=dt_find;
 
 			// perform computation
 			for (int i = iterations_start; i < steps; i += increment) {
