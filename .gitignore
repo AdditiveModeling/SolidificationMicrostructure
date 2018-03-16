@@ -30,3 +30,8 @@
 *.exe
 *.out
 *.app
+
+# MMSP generated files
+*.vti
+*.dat
+*[0-9]

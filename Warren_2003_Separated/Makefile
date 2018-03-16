@@ -13,13 +13,13 @@ pflags = $(flags) -include mpi.h
 
 # the program
 initialize: initialize.cpp
-	$(compiler) $(flags) $< -o $@ -lz
+	$(compiler) $(flags) $< -o $@.out -lz
 
 simulate: simulate.cpp
-	$(compiler) $(flags) $< -o $@ -lz
+	$(compiler) $(flags) $< -o $@.out -lz
 
 parallel: simulate.cpp
-	$(pcompiler) $(pflags) $< -o $@ -lz
+	$(pcompiler) $(pflags) $< -o $@.out -lz
 
 clean:
-	rm -rf simulate initialize parallel *~ *.dat *.vti
+	rm -rf simulate.out initialize.out parallel.out *~ *.dat *.vti
