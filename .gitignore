@@ -34,4 +34,4 @@
 # MMSP generated files
 *.vti
 *.dat
-*[0-9]
+*.[0-9]*
