@@ -158,7 +158,7 @@ if(len(sys.argv) == 8):
     B_B = 0.39 #linear kinetic coefficient of copper, cm/K/s
     v_m = 7.42 #molar volume, cm3/mol
     R = 8.314 #gas constant, J/mol*K
-    y_e = 0.01 #anisotropy
+    y_e = 0.12 #anisotropy
     #y_e = 0.0 #no anisotropy
     e_SA = 6395. #enthalpy of solid Nickel at melting point, J/cm3 (Desai1987)
     e_SB = 4023. #enthalpy of solid Copper at melting point, J/cm3 (Arblaster2015)
@@ -184,10 +184,10 @@ if(len(sys.argv) == 8):
     steps = int(sys.argv[5])
     gradT = float(sys.argv[6])
     #temperature
-    if(step == 0):
-        T = 1574.*np.ones(shape)
-        T += np.linspace(0, gradT*shape[1], shape[1])
+    T = 1574.*np.ones(shape)
+    T += np.linspace(0, gradT*shape[1], shape[1])
     dTdt = float(sys.argv[7])
+    T += step*dTdt
 
     for i in range(steps):
         step += 1
