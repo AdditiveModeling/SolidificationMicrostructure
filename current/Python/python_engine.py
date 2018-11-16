@@ -3,17 +3,22 @@ import sys
 import os
 
 def __h(phi):
+    #h function from Dorr2010
     return phi*phi*phi*(10-15*phi+6*phi*phi)
 
 def __hprime(phi):
+    #derivative of the h function from Dorr2010, w.r.t phi
     return (30*phi*phi*(1-phi)*(1-phi))
 
 def __g(phi):
+    #g function from Warren1995. Similar to that used in Dorr2010 and Granasy2014
     return (phi*phi*(1-phi)*(1-phi))
 
 def __gprime(phi):
+    #derivative of g function, w.r.t phi
     return (4*phi*phi*phi - 6*phi*phi +2*phi)
 
+#Numpy vectorized versions of above functions
 _h = np.vectorize(__h)
 _hprime = np.vectorize(__hprime)
 _g = np.vectorize(__g) 

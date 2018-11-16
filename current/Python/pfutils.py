@@ -4,6 +4,10 @@ import matplotlib.pyplot as plt
 from python_engine import *
 
 def coreSection(array, nbc):
+    """
+    Returns only the region of interest for plotting. 
+    Removes the buffer cells used for Neumann Boundary Conditions
+    """
     returnArray = array
     if(nbc[0]):
         returnArray = returnArray[1:-1, :]
@@ -12,6 +16,10 @@ def coreSection(array, nbc):
     return returnArray
 
 def plotImages(phi, c, q4, nbc, path, step):
+    """
+    Plots the phi (order), c (composition), and q4 (orientation component) fields for a given step
+    Saves images to the defined path
+    """
     colors = [(0, 0, 1), (0, 1, 1), (0, 1, 0), (1, 1, 0), (1, 0, 0)]
     cm = LinearSegmentedColormap.from_list('rgb', colors)
     colors2 = [(0, 0, 1), (1, 1, 0), (1, 0, 0)]
@@ -35,8 +43,13 @@ def plotImages(phi, c, q4, nbc, path, step):
     plt.savefig(path+'q4'+str(step)+'.png')
     
 def initializePlaneFront(rX, rY, path):
-    #this code block initializes a brand new simulation
-    #DONT run this for the demo! The two data sets are already initialized in the data folder (dendrites_small, dendrites_large)
+    """
+    Initializes a plane front simulation with a pre-generated fluctuation. 
+    Used to compare whether the simulation parameters result in planar, cellular, or dendritic growth
+    rX: Width of simulation region
+    rY: Height of simulation region
+    path: where the phi, c, q1, and q4 field data will be saved
+    """
 
     nbc = [False, True] #Neumann boundary conditions for y and x dimensions (due to the way arrays are organized). 
     #if false, its a periodic boundary instead
@@ -76,6 +89,15 @@ def initializePlaneFront(rX, rY, path):
     saveArrays(path, 0, phi, c, q1, q4)
     
 def initializeSeeds(rX, rY, nbcX, nbcY, numseeds, path):
+    """
+    Initializes a simulation with several pre-generated seed crystals, of random orientation. 
+    rX: Width of simulation region
+    rY: Height of simulation region
+    nbcX: Whether Neumann boundary conditions are used along the x-axis. Otherwise, boundary is periodic 
+    nbcY: Same as above, but for the y-axis. 
+    numseeds: How many seed crystals to initialize
+    path: where the phi, c, q1, and q4 field data will be saved
+    """
     nbc = [nbcY, nbcX]
     shape = []
     dim = 2
@@ -116,6 +138,14 @@ def initializeSeeds(rX, rY, nbcX, nbcY, numseeds, path):
     saveArrays(path, 0, phi, c, q1, q4)
     
 def initializeSeed(rX, rY, nbcX, nbcY, path):
+    """
+    Initializes a simulation with a single seed crystal in the center, of random orientation. 
+    rX: Width of simulation region
+    rY: Height of simulation region
+    nbcX: Whether Neumann boundary conditions are used along the x-axis. Otherwise, boundary is periodic 
+    nbcY: Same as above, but for the y-axis. 
+    path: where the phi, c, q1, and q4 field data will be saved
+    """
     nbc = [nbcY, nbcX]
     shape = []
     dim = 2
