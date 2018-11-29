@@ -1,47 +1,6 @@
 import numpy as np
-from matplotlib.colors import LinearSegmentedColormap
-import matplotlib.pyplot as plt
 from python_engine import *
 
-def coreSection(array, nbc):
-    """
-    Returns only the region of interest for plotting. 
-    Removes the buffer cells used for Neumann Boundary Conditions
-    """
-    returnArray = array
-    if(nbc[0]):
-        returnArray = returnArray[1:-1, :]
-    if(nbc[1]):
-        returnArray = returnArray[:, 1:-1]
-    return returnArray
-
-def plotImages(phi, c, q4, nbc, path, step):
-    """
-    Plots the phi (order), c (composition), and q4 (orientation component) fields for a given step
-    Saves images to the defined path
-    """
-    colors = [(0, 0, 1), (0, 1, 1), (0, 1, 0), (1, 1, 0), (1, 0, 0)]
-    cm = LinearSegmentedColormap.from_list('rgb', colors)
-    colors2 = [(0, 0, 1), (1, 1, 0), (1, 0, 0)]
-    cm2 = LinearSegmentedColormap.from_list('rgb', colors2)
-
-    fig, ax = plt.subplots()
-    plt.rcParams['figure.figsize'] = 4, 4
-    plt.title('phi')
-    cax = plt.imshow(coreSection(phi, nbc), cmap=cm2)
-    cbar = fig.colorbar(cax, ticks=[np.min(phi), np.max(phi)])
-    plt.savefig(path+'phi'+str(step)+'.png')
-    fig, ax = plt.subplots()
-    plt.title('c')
-    cax = plt.imshow(coreSection(c, nbc), cmap=cm)
-    cbar = fig.colorbar(cax, ticks=[np.min(c), np.max(c)])
-    plt.savefig(path+'c'+str(step)+'.png')
-    fig, ax = plt.subplots()
-    plt.title('q4')
-    cax = plt.imshow(coreSection(q4, nbc), cmap=cm2)
-    cbar = fig.colorbar(cax, ticks=[np.min(q4), np.max(q4)])
-    plt.savefig(path+'q4'+str(step)+'.png')
-    
 def initializePlaneFront(rX, rY, path):
     """
     Initializes a plane front simulation with a pre-generated fluctuation. 
