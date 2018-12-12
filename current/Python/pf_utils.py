@@ -1,7 +1,6 @@
 import numpy as np
 from matplotlib.colors import LinearSegmentedColormap
 import matplotlib.pyplot as plt
-from python_engine import *
 
 def __h(phi):
     #h function from Dorr2010
@@ -95,15 +94,6 @@ def saveArrays(path, timestep, phi, c, q1, q4):
     
 def applyBCs(phi, c, q1, q4, nbc):
     if(nbc[0]):
-        c[0,:] = c[1,:]
-        c[-1,:] = c[-2,:]
-        phi[0,:] = phi[1,:]
-        phi[-1,:] = phi[-2,:]
-        q1[0,:] = q1[1,:]
-        q1[-1,:] = q1[-2,:]
-        q4[0,:] = q4[1,:]
-        q4[-1,:] = q4[-2,:]
-    if(nbc[1]):
         c[:,0] = c[:,1]
         c[:,-1] = c[:,-2]
         phi[:,0] = phi[:,1]
@@ -112,6 +102,15 @@ def applyBCs(phi, c, q1, q4, nbc):
         q1[:,-1] = q1[:,-2]
         q4[:,0] = q4[:,1]
         q4[:,-1] = q4[:,-2]
+    if(nbc[1]):
+        c[0,:] = c[1,:]
+        c[-1,:] = c[-2,:]
+        phi[0,:] = phi[1,:]
+        phi[-1,:] = phi[-2,:]
+        q1[0,:] = q1[1,:]
+        q1[-1,:] = q1[-2,:]
+        q4[0,:] = q4[1,:]
+        q4[-1,:] = q4[-2,:]
 
 def coreSection(array, nbc):
     """
