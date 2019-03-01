@@ -1,6 +1,42 @@
 import numpy as np
+import os
 from matplotlib.colors import LinearSegmentedColormap
 import matplotlib.pyplot as plt
+import pycalphad as pyc
+
+#initialize TDB file in pycalphad, from up a dir and in the TDB folder
+rootFolder = os.path.abspath(os.path.dirname(__file__) + '/..')
+tdb = pyc.Database(rootFolder + '/TDB/Ni-Cu.tdb')
+phases = ['LIQUID', 'FCC_A1']
+components = ['CU', 'NI']
+
+def compute_tdb_energy(temps, c, phase):
+    flattened_c = c.flatten()
+    flattened_expanded_c = np.expand_dims(flattened_c, axis=1)
+    flattened_expanded_binary_c = np.concatenate((flattened_expanded_c, 1-flattened_expanded_c), axis=1)
+    #offset composition, for computing slope of GM w.r.t. comp
+    feb_c_offset = flattened_expanded_binary_c+np.array([0.0000001, -0.0000001])
+    flattened_t = temps.flatten()
+    GM = pyc.calculate(tdb, components, phase, P=101325, T=flattened_t, points=flattened_expanded_binary_c, broadcast=False).GM.values.reshape(c.shape)
+    GM_2 = pyc.calculate(tdb, components, phase, P=101325, T=flattened_t, points=feb_c_offset, broadcast=False).GM.values.reshape(c.shape)
+    return GM, (GM_2-GM)*(10000000.)
+
+def load_tdb(path):
+    global tdb
+    global phases
+    global components
+    tdb = pyc.Database(rootfolder + '/' + path)
+    
+    #update phases
+    # will automatically updates "phases" for multiphase model. For now, phases is hardcoded
+    
+    #update components
+    firstphase = tdb.phases[next(iter(tdb.phases.keys()))]
+    ic = iter(firstphase.constituents[0])
+    #assumes 2 components, needs fixing for multicomponent model!
+    c1 = next(iter(next(iter(ic)).constituents))
+    c2 = next(iter(next(iter(ic)).constituents))
+    components = [c1, c2]
 
 def __h(phi):
     #h function from Dorr2010

@@ -154,14 +154,15 @@ def simulate(path, nbc, initialStep, steps, gradT, dTdt):
             for j in range(dim):
                 rgqsl.append(np.sqrt(gqsl[j]))
                 rgqsr.append(np.sqrt(gqsr[j]))
+                
+            #compute values from tdb
+            G_L, dGLdc = utils.compute_tdb_energy(T, c, "LIQUID")
+            G_S, dGSdc = utils.compute_tdb_energy(T, c, "FCC_A1")
         
             #change in c
             M_C = v_m*c*(1-c)*(D_S+m*(D_L-D_S))/R/1574.
-            temp = W_B*g*T+(1-T/T_mB)*(e_SB-C_B*T_mB+m*L_B)-C_B*T*np.log(T/T_mB)+R*T*np.log(c)/v_m - W_A*g*T - (1-T/T_mA)*(e_SA-C_A*T_mA+m*L_A) + C_A*T*np.log(T/T_mA)-R*T*np.log(1-c)/v_m
+            temp = (dGSdc + m*(dGLdc-dGSdc))/v_m + (W_B-W_A)*g*T
             deltac = utils.divagradb(M_C, temp, dx, dim)
-            #D_C = D_S+m*(D_L-D_S)
-            #temp = D_C*v_m*c*(1-c)*(H_B-H_A)/R
-            #deltac = divagradb(D_C, c, dx, dim) + divagradb(temp, phi, dx, dim)
         
             #change in phi
             divTgradphi = utils.divagradb(T, phi, dx, dim)
@@ -175,10 +176,10 @@ def simulate(path, nbc, initialStep, steps, gradT, dTdt):
             pf_comp_y = 8*y_e*T*((2*a2_b2*psiy3 - 2*ab2*psix3)/vertex_centered_mgphi2 - vertex_averaged_gphi[1]*(psix3*vertex_centered_gpsi[0] + psiy3*vertex_centered_gpsi[1])/(vertex_centered_mgphi2*vertex_centered_mgphi2))
             pf_comp_y = (np.roll(pf_comp_y, -1, 1) - pf_comp_y)/dx
             pf_comp_y = (np.roll(pf_comp_y, -1, 0) + pf_comp_y)/2.
-            deltaphi = M_phi*(ebar*ebar*((1-3*y_e)*divTgradphi + pf_comp_x + pf_comp_y)-(1-c)*H_A-c*H_B-4*H*T*phi*rgqs_0*1574.)
+            deltaphi = M_phi*(ebar*ebar*((1-3*y_e)*divTgradphi + pf_comp_x + pf_comp_y)-30*g*(G_S-G_L)/v_m-W_A*gprime*T*(1-c)-W_B*gprime*T*c-4*H*T*phi*rgqs_0*1574.)
             randArray = 2*np.random.random_sample(shape)-1
             alpha = 0.3
-            deltaphi += M_phi*alpha*randArray*(16*g)*((1-c)*H_A+c*H_B)
+            deltaphi += M_phi*alpha*randArray*(16*g)*(30*g*(G_S-G_L)/v_m+W_A*T*gprime*(1-c)+W_B*T*gprime*c)
         
             #changes in q, part 1
             dq_component = 2*H*T*p
@@ -226,6 +227,8 @@ def simulate(path, nbc, initialStep, steps, gradT, dTdt):
         #This code segment saves the arrays every 1000 steps
         if(step%500 == 0):
             utils.saveArrays(path, step, phi, c, q1, q4)
+            print((-30*g*(G_S-G_L)/v_m)[40])
+            print(((1-c)*(-30*L_A*(1-T/T_mA)*g)+c*(-30*L_B*(1-T/T_mB)*g))[40])
 
     print("Done")
 
