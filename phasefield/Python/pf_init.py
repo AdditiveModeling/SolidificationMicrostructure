@@ -3,7 +3,7 @@ import pf_utils as utils
 import pf_engine as engine
 import os
 
-def preinitialize(sim_type, path):
+def preinitialize(sim_type, path, pathToTDB):
     """
     Used in all initialize functions
     Creates a folder for the simulation that contains an "info.txt" file
@@ -11,6 +11,7 @@ def preinitialize(sim_type, path):
     If an info.txt file already exists at the defined path, abort setup, and 
         notify user to choose a different location or delete the previous data
     """
+    utils.loadTDB(pathToTDB)
     if(os.path.isfile(path+"info.txt")):
         print("A simulation has already been created at this path - aborting initialization!")
         print("Please choose a different path, or delete the previous simulation")
@@ -34,14 +35,7 @@ def preinitialize(sim_type, path):
     info.write("    Grain boundary energy scaling term (H): "+str(engine.H)+"\n")
     info.write("    Well height in A (W_A): "+str(engine.W_A)+"\n")
     info.write("    Well height in B (W_B): "+str(engine.W_B)+"\n")
-    info.write("    Latent heat of A (L_A): "+str(engine.L_A)+"\n")
-    info.write("    Latent heat of B (L_B): "+str(engine.L_B)+"\n")
-    info.write("    Melting point of A (T_mA): "+str(engine.T_mA)+"\n")
-    info.write("    Melting point of B (T_mB): "+str(engine.T_mB)+"\n")
-    info.write("    Heat capacity of A (C_A): "+str(engine.C_A)+"\n")
-    info.write("    Heat capacity of B (C_B): "+str(engine.C_B)+"\n")
-    info.write("    Enthalpy of A at M.P. (e_SA): "+str(engine.e_SA)+"\n")
-    info.write("    Enthalpy of B at M.P. (e_SB): "+str(engine.e_SB)+"\n")
+    info.write("    TDB File used: "+pathToTDB+"\n")
     info.write("  Other: \n")
     info.write("    Molar Volume (v_m): "+str(engine.C_A)+"\n")
     info.write("    Interfacial thickness (d): "+str(engine.d)+"\n\n")
@@ -58,7 +52,7 @@ def preinitialize(sim_type, path):
     return True
     
 
-def initializePlaneFront(rX, rY, path):
+def initializePlaneFront(rX, rY, path, pathToTDB):
     """
     Initializes a plane front simulation with a pre-generated fluctuation. 
     Used to compare whether the simulation parameters result in planar, cellular, or dendritic growth
@@ -68,7 +62,7 @@ def initializePlaneFront(rX, rY, path):
     """
     
     sim_type = "  Plane Front:\n    Size: ["+str(rX)+", "+str(rY)+"]"
-    if not preinitialize(sim_type, path):
+    if not preinitialize(sim_type, path, pathToTDB):
         return False
     
     nbc = [True, False] #Neumann boundary conditions for x and y dimensions 
@@ -89,20 +83,18 @@ def initializePlaneFront(rX, rY, path):
 
     #initialize left side with a small solid region
     phi[:,0:5] = 1.
-    c[:,0:5] = 0.40831*0.3994/0.4668
     
     #add small instability, will either disappear (stable planar growth) or grow (cellular/dendritic growth)
     for i in range((int)(resY/2-5), (int)(resY/2+5)):
         for j in range((int)(0), (int)(10)):
             if((i-resY/2)*(i-resY/2)+(j-5)*(j-5) < 25):
                 phi[i][j] = 1.
-                c[i][j] = 0.40831*0.3994/0.4668
 
     utils.applyBCs(phi, c, q1, q4, nbc)
     utils.saveArrays(path, 0, phi, c, q1, q4)
     return True
     
-def initializeSeeds(rX, rY, nbcX, nbcY, numseeds, path):
+def initializeSeeds(rX, rY, nbcX, nbcY, numseeds, path, pathToTDB):
     """
     Initializes a simulation with several pre-generated seed crystals, of random orientation. 
     rX: Width of simulation region
@@ -114,7 +106,7 @@ def initializeSeeds(rX, rY, nbcX, nbcY, numseeds, path):
     """
     
     sim_type = "  Multiple Seeds:\n    Size: ["+str(rX)+", "+str(rY)+"]\n    Neumann Boundary Conditions: ["+str(nbcX)+", "+str(nbcY)+"]\n    Number of Seeds: "+str(numseeds)
-    if not preinitialize(sim_type, path):
+    if not preinitialize(sim_type, path, pathToTDB):
         return False
     
     nbc = [nbcX, nbcY]
@@ -157,7 +149,7 @@ def initializeSeeds(rX, rY, nbcX, nbcY, numseeds, path):
     utils.saveArrays(path, 0, phi, c, q1, q4)
     return True
     
-def initializeSeed(rX, rY, nbcX, nbcY, path):
+def initializeSeed(rX, rY, nbcX, nbcY, path, pathToTDB):
     """
     Initializes a simulation with a single seed crystal in the center, of random orientation. 
     rX: Width of simulation region
@@ -168,7 +160,7 @@ def initializeSeed(rX, rY, nbcX, nbcY, path):
     """
     
     sim_type = "  Single Seed:\n    Size: ["+str(rX)+", "+str(rY)+"]\n    Neumann Boundary Conditions: ["+str(nbcX)+", "+str(nbcY)+"]"
-    if not preinitialize(sim_type, path):
+    if not preinitialize(sim_type, path, pathToTDB):
         return False
     
     nbc = [nbcX, nbcY]

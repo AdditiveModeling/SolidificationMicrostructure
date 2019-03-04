@@ -43,7 +43,7 @@ W_B = 3*s_B/(np.sqrt(2)*T_mB*d)
 M_A = T_mA*T_mA*B_A/(6*np.sqrt(2)*L_A*d)/1574.
 M_B = T_mB*T_mB*B_B/(6*np.sqrt(2)*L_B*d)/1574.
 
-def simulate(path, nbc, initialStep, steps, gradT, dTdt):
+def simulate(path, nbc, initialStep, steps, initT, gradT, dTdt):
     if not os.path.isfile(path+"info.txt"):
         print("Simulation has not been initialized yet - aborting engine!")
         return
@@ -53,6 +53,7 @@ def simulate(path, nbc, initialStep, steps, gradT, dTdt):
     info.write("    Initial Step: "+str(initialStep)+"\n")
     info.write("    Number of steps to run: "+str(steps)+"\n")
     info.write("    Neumann Boundary Condition array used: ["+str(nbc[0])+", "+str(nbc[1])+"]\n")
+    info.write("    Initial Temperature on left edge: "+str(initT)+"\n")
     info.write("    Temperature gradient (K/cell): "+str(gradT)+"\n")
     info.write("    Change in temperature over time (K/time_step): "+str(dTdt)+"\n\n")
     info.close()
@@ -61,7 +62,7 @@ def simulate(path, nbc, initialStep, steps, gradT, dTdt):
     shape = c.shape #get the shape of the simulation region from one of the arrays
     
     #temperature
-    T = 1574.*np.ones(shape)
+    T = (initT+0.0)*np.ones(shape) #convert T to double just in case
     T += np.linspace(0, gradT*shape[1], shape[1])
     T += step*dTdt
 
@@ -227,15 +228,13 @@ def simulate(path, nbc, initialStep, steps, gradT, dTdt):
         #This code segment saves the arrays every 1000 steps
         if(step%500 == 0):
             utils.saveArrays(path, step, phi, c, q1, q4)
-            print((-30*g*(G_S-G_L)/v_m)[40])
-            print(((1-c)*(-30*L_A*(1-T/T_mA)*g)+c*(-30*L_B*(1-T/T_mB)*g))[40])
 
     print("Done")
 
 #path, _nbc_x, _nbc_y, initialStep, steps, these are the command line arguments
 
 if __name__ == '__main__':
-    if(len(sys.argv) == 8):
+    if(len(sys.argv) == 9):
         path = sys.argv[1]
         if not os.path.exists(path):
             os.makedirs(path)
@@ -254,8 +253,9 @@ if __name__ == '__main__':
         
         initialStep = int(sys.argv[4])
         steps = int(sys.argv[5])
-        gradT = float(sys.argv[6])
-        dTdt = float(sys.argv[7])
-        simulate(path, nbc, initialStep, steps, gradT, dTdt)
+        initT = float(sys.argv[6])
+        gradT = float(sys.argv[7])
+        dTdt = float(sys.argv[8])
+        simulate(path, nbc, initialStep, steps, initT, gradT, dTdt)
     else:
-        print("Error! Needs exactly 7 additional arguments! (path, nbc_x, nbc_y, initialStep, steps, gradT, dT/dt)")
+        print("Error! Needs exactly 8 additional arguments! (path, nbc_x, nbc_y, initialStep, steps, initT, gradT, dT/dt)")
