@@ -21,11 +21,27 @@ def compute_tdb_energy(temps, c, phase):
     GM_2 = pyc.calculate(tdb, components, phase, P=101325, T=flattened_t, points=feb_c_offset, broadcast=False).GM.values.reshape(c.shape)
     return GM, (GM_2-GM)*(10000000.)
 
+def compute_tdb_energy_3c(temps, c1, c2, phase):
+    #the order is copper, aluminum, nickel in the TDB calculate function
+    flattened_c1 = c1.flatten()
+    f_expanded_c1 = np.expand_dims(flattened_c1, axis=1)
+    flattened_c2 = c2.flatten()
+    f_expanded_c2 = np.expand_dims(flattened_c2, axis=1)
+    flattened_expanded_trinary_c = np.concatenate((f_expanded_c2, 1-f_expanded_c1-f_expanded_c2, f_expanded_c1), axis=1)
+    #offset composition, for computing slope of GM w.r.t. comp
+    fet_c1_offset = flattened_expanded_trinary_c+np.array([0., -0.0000001, 0.0000001])
+    fet_c2_offset = flattened_expanded_trinary_c+np.array([0.0000001, -0.0000001, 0.])
+    flattened_t = temps.flatten()
+    GM = pyc.calculate(tdb, components, phase, P=101325, T=flattened_t, points=flattened_expanded_trinary_c, broadcast=False).GM.values.reshape(c1.shape)
+    GM_2 = pyc.calculate(tdb, components, phase, P=101325, T=flattened_t, points=fet_c1_offset, broadcast=False).GM.values.reshape(c1.shape)
+    GM_3 = pyc.calculate(tdb, components, phase, P=101325, T=flattened_t, points=fet_c2_offset, broadcast=False).GM.values.reshape(c1.shape)
+    return GM, (GM_2-GM)*(10000000.), (GM_3-GM)*(10000000.)
+
 def load_tdb(path):
     global tdb
     global phases
     global components
-    tdb = pyc.Database(rootfolder + '/' + path)
+    tdb = pyc.Database(rootFolder + '/' + path)
     
     #update phases
     # will automatically updates "phases" for multiphase model. For now, phases is hardcoded
@@ -34,9 +50,11 @@ def load_tdb(path):
     firstphase = tdb.phases[next(iter(tdb.phases.keys()))]
     ic = iter(firstphase.constituents[0])
     #assumes 2 components, needs fixing for multicomponent model!
-    c1 = next(iter(next(iter(ic)).constituents))
-    c2 = next(iter(next(iter(ic)).constituents))
-    components = [c1, c2]
+    comp_array = []
+    for i in range(len(firstphase.constituents[0])):
+        comp = next(iter(next(iter(ic)).constituents))
+        comp_array.append(comp)
+    components = comp_array
 
 def __h(phi):
     #h function from Dorr2010
@@ -122,9 +140,24 @@ def loadArrays(path, timestep):
     _phi = np.load(path+'phi_'+str(timestep)+'.npy')
     return timestep, _phi, _c, _q1, _q4
 
+def loadArrays_3c(path, timestep):
+    _q1 = np.load(path+'q1_'+str(timestep)+'.npy')
+    _q4 = np.load(path+'q4_'+str(timestep)+'.npy')
+    _c1 = np.load(path+'c1_'+str(timestep)+'.npy')
+    _c2 = np.load(path+'c2_'+str(timestep)+'.npy')
+    _phi = np.load(path+'phi_'+str(timestep)+'.npy')
+    return timestep, _phi, _c1, _c2, _q1, _q4
+
 def saveArrays(path, timestep, phi, c, q1, q4):
     np.save(path+'phi_'+str(timestep), phi)
     np.save(path+'c_'+str(timestep), c)
+    np.save(path+'q1_'+str(timestep), q1)
+    np.save(path+'q4_'+str(timestep), q4)
+    
+def saveArrays_3c(path, timestep, phi, c1, c2, q1, q4):
+    np.save(path+'phi_'+str(timestep), phi)
+    np.save(path+'c1_'+str(timestep), c1)
+    np.save(path+'c2_'+str(timestep), c2)
     np.save(path+'q1_'+str(timestep), q1)
     np.save(path+'q4_'+str(timestep), q4)
     
@@ -141,6 +174,30 @@ def applyBCs(phi, c, q1, q4, nbc):
     if(nbc[1]):
         c[0,:] = c[1,:]
         c[-1,:] = c[-2,:]
+        phi[0,:] = phi[1,:]
+        phi[-1,:] = phi[-2,:]
+        q1[0,:] = q1[1,:]
+        q1[-1,:] = q1[-2,:]
+        q4[0,:] = q4[1,:]
+        q4[-1,:] = q4[-2,:]
+        
+def applyBCs_3c(phi, c1, c2, q1, q4, nbc):
+    if(nbc[0]):
+        c1[:,0] = c1[:,1]
+        c1[:,-1] = c1[:,-2]
+        c2[:,0] = c2[:,1]
+        c2[:,-1] = c2[:,-2]
+        phi[:,0] = phi[:,1]
+        phi[:,-1] = phi[:,-2]
+        q1[:,0] = q1[:,1]
+        q1[:,-1] = q1[:,-2]
+        q4[:,0] = q4[:,1]
+        q4[:,-1] = q4[:,-2]
+    if(nbc[1]):
+        c1[0,:] = c1[1,:]
+        c1[-1,:] = c1[-2,:]
+        c2[0,:] = c2[1,:]
+        c2[-1,:] = c2[-2,:]
         phi[0,:] = phi[1,:]
         phi[-1,:] = phi[-2,:]
         q1[0,:] = q1[1,:]
@@ -175,14 +232,46 @@ def plotImages(phi, c, q4, nbc, path, step):
     plt.title('phi')
     cax = plt.imshow(coreSection(phi, nbc), cmap=cm2)
     cbar = fig.colorbar(cax, ticks=[np.min(phi), np.max(phi)])
-    plt.savefig(path+'phi'+str(step)+'.png')
+    plt.savefig(path+'phi_'+str(step)+'.png')
     fig, ax = plt.subplots()
     plt.title('c')
     cax = plt.imshow(coreSection(c, nbc), cmap=cm)
     cbar = fig.colorbar(cax, ticks=[np.min(c), np.max(c)])
-    plt.savefig(path+'c'+str(step)+'.png')
+    plt.savefig(path+'c_'+str(step)+'.png')
     fig, ax = plt.subplots()
     plt.title('q4')
     cax = plt.imshow(coreSection(q4, nbc), cmap=cm2)
     cbar = fig.colorbar(cax, ticks=[np.min(q4), np.max(q4)])
-    plt.savefig(path+'q4'+str(step)+'.png')
+    plt.savefig(path+'q4_'+str(step)+'.png')
+    
+def plotImages_3c(phi, c1, c2, q4, nbc, path, step):
+    """
+    Plots the phi (order), c (composition), and q4 (orientation component) fields for a given step
+    Saves images to the defined path
+    """
+    colors = [(0, 0, 1), (0, 1, 1), (0, 1, 0), (1, 1, 0), (1, 0, 0)]
+    cm = LinearSegmentedColormap.from_list('rgb', colors)
+    colors2 = [(0, 0, 1), (1, 1, 0), (1, 0, 0)]
+    cm2 = LinearSegmentedColormap.from_list('rgb', colors2)
+
+    fig, ax = plt.subplots()
+    plt.rcParams['figure.figsize'] = 4, 4
+    plt.title('phi')
+    cax = plt.imshow(coreSection(phi, nbc), cmap=cm2)
+    cbar = fig.colorbar(cax, ticks=[np.min(phi), np.max(phi)])
+    plt.savefig(path+'phi_'+str(step)+'.png')
+    fig, ax = plt.subplots()
+    plt.title('c1')
+    cax = plt.imshow(coreSection(c1, nbc), cmap=cm)
+    cbar = fig.colorbar(cax, ticks=[np.min(c1), np.max(c1)])
+    plt.savefig(path+'c1_'+str(step)+'.png')
+    fig, ax = plt.subplots()
+    plt.title('c2')
+    cax = plt.imshow(coreSection(c2, nbc), cmap=cm)
+    cbar = fig.colorbar(cax, ticks=[np.min(c2), np.max(c2)])
+    plt.savefig(path+'c2_'+str(step)+'.png')
+    fig, ax = plt.subplots()
+    plt.title('q4')
+    cax = plt.imshow(coreSection(q4, nbc), cmap=cm2)
+    cbar = fig.colorbar(cax, ticks=[np.min(q4), np.max(q4)])
+    plt.savefig(path+'q4_'+str(step)+'.png')

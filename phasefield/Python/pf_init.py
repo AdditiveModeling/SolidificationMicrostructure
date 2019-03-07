@@ -11,7 +11,7 @@ def preinitialize(sim_type, path, pathToTDB):
     If an info.txt file already exists at the defined path, abort setup, and 
         notify user to choose a different location or delete the previous data
     """
-    utils.loadTDB(pathToTDB)
+    utils.load_tdb(pathToTDB)
     if(os.path.isfile(path+"info.txt")):
         print("A simulation has already been created at this path - aborting initialization!")
         print("Please choose a different path, or delete the previous simulation")
@@ -26,25 +26,29 @@ def preinitialize(sim_type, path, pathToTDB):
     info.write("    Orientational Mobility (M_qmax): "+str(engine.M_qmax)+"\n")
     info.write("    Order mobility in A (M_A): "+str(engine.M_A)+"\n")
     info.write("    Order mobility in B (M_B): "+str(engine.M_B)+"\n")
+    if(len(utils.components) == 3):
+        info.write("    Order mobility in C (M_C): "+str(engine.M_C)+"\n")
     info.write("    Diffusion in liquid (D_L): "+str(engine.D_L)+"\n")
     info.write("    Diffusion in solid (D_S): "+str(engine.D_S)+"\n")
     info.write("  Energy Terms: \n")
     info.write("    Order epsilon term (ebar): "+str(engine.ebar)+"\n")
     info.write("    Orientation epsilon term (eqbar): "+str(engine.eqbar)+"\n")
-    info.write("    Anisotropy of S-L interfacial energy (y_e): "+str(engine.T_mA)+"\n")
+    info.write("    Anisotropy of S-L interfacial energy (y_e): "+str(engine.y_e)+"\n")
     info.write("    Grain boundary energy scaling term (H): "+str(engine.H)+"\n")
     info.write("    Well height in A (W_A): "+str(engine.W_A)+"\n")
     info.write("    Well height in B (W_B): "+str(engine.W_B)+"\n")
+    if(len(utils.components) == 3):
+        info.write("    Well height in C (W_C): "+str(engine.W_C)+"\n")
     info.write("    TDB File used: "+pathToTDB+"\n")
     info.write("  Other: \n")
-    info.write("    Molar Volume (v_m): "+str(engine.C_A)+"\n")
+    info.write("    Molar Volume (v_m): "+str(engine.v_m)+"\n")
     info.write("    Interfacial thickness (d): "+str(engine.d)+"\n\n")
     info.write("Discretization Parameters: \n")
     info.write("    Number of dimensions (dim): "+str(engine.dim)+"\n")
     info.write("    Cell size (dx): "+str(engine.dx)+"\n")
     info.write("    Time step (dt): "+str(engine.dt)+"\n\n")
     info.write("Notes: \n")
-    info.write("    Currently using Nickel-Copper system, Nickel = A, Copper = B\n")
+    info.write("    Components used: "+str(utils.components)+"\n")
     info.write("    Units are cm, s, J, K, mol\n")
     info.write("    0 = liquid, 1 = solid, opposite of Warren1995\n\n")
     info.write("Logs of simulation runs: \n\n")
@@ -178,13 +182,21 @@ def initializeSeed(rX, rY, nbcX, nbcY, path, pathToTDB):
     else:
         shape.append(resX)
 
-    c = np.zeros(shape)
     phi = np.zeros(shape)
     q1 = np.zeros(shape)
     q4 = np.zeros(shape)
     q1 += np.cos(0*np.pi/8)
     q4 += np.sin(0*np.pi/8)
-    c += 0.40831
+    if(len(utils.components) == 2):
+        c = np.zeros(shape)
+        c += 0.40831
+    #manually doing 3-component for now, will have to rewrite for N component model
+    elif(len(utils.components) == 3):
+        c1 = np.zeros(shape)
+        c1 += (0.99-0.40831)
+        c2 = np.zeros(shape)
+        c2 += 0.40831
+        #c3 is 0.01 (1% aluminum)
 
     randAngle = np.random.rand(seeds)*np.pi/4-np.pi/8
     randX = [resX/2]
@@ -197,6 +209,11 @@ def initializeSeed(rX, rY, nbcX, nbcY, path, pathToTDB):
                     q1[i][j] = np.cos(randAngle[k])
                     q4[i][j] = np.sin(randAngle[k])
 
-    utils.applyBCs(c, phi, q1, q4, nbc)
-    utils.saveArrays(path, 0, phi, c, q1, q4)
+    if(len(utils.components) == 2):
+        utils.applyBCs(c, phi, q1, q4, nbc)
+        utils.saveArrays(path, 0, phi, c, q1, q4)
+    #manually doing 3-component for now, will have to rewrite for N component model
+    elif(len(utils.components) == 3):
+        utils.applyBCs_3c(phi, c1, c2, q1, q4, nbc)
+        utils.saveArrays_3c(path, 0, phi, c1, c2, q1, q4)
     return True
