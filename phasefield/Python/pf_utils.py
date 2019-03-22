@@ -22,15 +22,15 @@ def compute_tdb_energy(temps, c, phase):
     return GM, (GM_2-GM)*(10000000.)
 
 def compute_tdb_energy_3c(temps, c1, c2, phase):
-    #the order is copper, aluminum, nickel in the TDB calculate function
+    #the order is aluminum, copper, nickel in the TDB calculate function (alphabetical!)
     flattened_c1 = c1.flatten()
     f_expanded_c1 = np.expand_dims(flattened_c1, axis=1)
     flattened_c2 = c2.flatten()
     f_expanded_c2 = np.expand_dims(flattened_c2, axis=1)
-    flattened_expanded_trinary_c = np.concatenate((f_expanded_c2, 1-f_expanded_c1-f_expanded_c2, f_expanded_c1), axis=1)
+    flattened_expanded_trinary_c = np.concatenate((1-f_expanded_c1-f_expanded_c2, f_expanded_c2, f_expanded_c1), axis=1)
     #offset composition, for computing slope of GM w.r.t. comp
-    fet_c1_offset = flattened_expanded_trinary_c+np.array([0., -0.0000001, 0.0000001])
-    fet_c2_offset = flattened_expanded_trinary_c+np.array([0.0000001, -0.0000001, 0.])
+    fet_c1_offset = flattened_expanded_trinary_c+np.array([-0.0000001, 0., 0.0000001])
+    fet_c2_offset = flattened_expanded_trinary_c+np.array([-0.0000001, 0.0000001, 0.])
     flattened_t = temps.flatten()
     GM = pyc.calculate(tdb, components, phase, P=101325, T=flattened_t, points=flattened_expanded_trinary_c, broadcast=False).GM.values.reshape(c1.shape)
     GM_2 = pyc.calculate(tdb, components, phase, P=101325, T=flattened_t, points=fet_c1_offset, broadcast=False).GM.values.reshape(c1.shape)
@@ -49,10 +49,9 @@ def load_tdb(path):
     #update components
     firstphase = tdb.phases[next(iter(tdb.phases.keys()))]
     ic = iter(firstphase.constituents[0])
-    #assumes 2 components, needs fixing for multicomponent model!
     comp_array = []
     for i in range(len(firstphase.constituents[0])):
-        comp = next(iter(next(iter(ic)).constituents))
+        comp = next(iter(next(ic).constituents))
         comp_array.append(comp)
     components = comp_array
 
@@ -212,9 +211,9 @@ def coreSection(array, nbc):
     """
     returnArray = array
     if(nbc[0]):
-        returnArray = returnArray[1:-1, :]
-    if(nbc[1]):
         returnArray = returnArray[:, 1:-1]
+    if(nbc[1]):
+        returnArray = returnArray[1:-1, :]
     return returnArray
 
 def plotImages(phi, c, q4, nbc, path, step):

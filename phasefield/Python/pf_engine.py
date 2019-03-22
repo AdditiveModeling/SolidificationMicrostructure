@@ -351,8 +351,8 @@ def simulate_3c(path, nbc, initialStep, steps, initT, gradT, dTdt):
             G_S, dGSdc1, dGSdc2 = utils.compute_tdb_energy_3c(T, c1, c2, "FCC_A1")
         
             #change in c1, c2
-            M_c1 = v_m*c1*(D_S+m*(D_L-D_S))/R/T
-            M_c2 = v_m*c2*(D_S+m*(D_L-D_S))/R/T
+            M_c1 = v_m*c1*(D_S+m*(D_L-D_S))/R/1574.
+            M_c2 = v_m*c2*(D_S+m*(D_L-D_S))/R/1574.
             dFdc1 = (dGSdc1 + m*(dGLdc1-dGSdc1))/v_m + (W_A-W_C)*g*T
             dFdc2 = (dGSdc2 + m*(dGLdc2-dGSdc2))/v_m + (W_B-W_C)*g*T
             deltac1 = utils.divagradb(M_c1*(1-c1), dFdc1, dx, dim) - utils.divagradb(M_c1*c2, dFdc2, dx, dim)

@@ -217,3 +217,60 @@ def initializeSeed(rX, rY, nbcX, nbcY, path, pathToTDB):
         utils.applyBCs_3c(phi, c1, c2, q1, q4, nbc)
         utils.saveArrays_3c(path, 0, phi, c1, c2, q1, q4)
     return True
+
+def initialize1D(rX, interface, same_ori, num_components, c_a, c_b, path, pathToTDB):
+    """
+    Initializes a simulation with a solid region on the left, and a liquid region on the right 
+    rX: Width of simulation region
+    interface: point at which second region begins
+    same_ori: if true, both regions have same q values, otherwise offset by 45 degrees
+    num_components: number of components to simulate
+    c_a: array giving the for the first N-1 components values in the first region
+    c_b: same, but in the second region
+    path: where the phi, c_i, q1, and q4 field data will be saved
+    pathToTDB: where the TDB file for the thermodynamics can be found
+    """
+    
+    sim_type = "  1-Dimension:\n    Size: ["+str(rX)+"]\n    c_a: "+str(c_a)+", c_b: "+str(c_b)+"\n    Thermodynamics: "+pathToTDB
+    if not preinitialize(sim_type, path, pathToTDB):
+        return False
+    
+    nbc = [True, False]
+    shape = []
+    dim = 2
+    resX = rX
+    shape.append(1)
+    shape.append(resX+2)
+
+    phi = np.zeros(shape)
+    phi += 1.
+    q1 = np.zeros(shape)
+    q4 = np.zeros(shape)
+    q1 += np.cos(0*np.pi/8)
+    q4 += np.sin(0*np.pi/8)
+    if(len(utils.components) == 2):
+        c = np.zeros(shape)
+        c += c_a
+        c[0, interface:] = c_b
+        phi[0, interface:] = 0
+        if not same_ori:
+            q1[0, interface:] = np.cos(1*np.pi/8)
+            q4[0, interface:] = np.sin(0*np.pi/8)
+        utils.applyBCs(c, phi, q1, q4, nbc)
+        utils.saveArrays(path, 0, phi, c, q1, q4)
+    #manually doing 3-component for now, will have to rewrite for N component model
+    elif(len(utils.components) == 3):
+        c1 = np.zeros(shape)
+        c1 += c_a[0]
+        c2 = np.zeros(shape)
+        c2 += c_a[1]
+        c1[0, interface:] = c_b[0]
+        c2[0, interface:] = c_b[1]
+        phi[0, interface:] = 0
+        if not same_ori:
+            q1[0, interface:] = np.cos(1*np.pi/8)
+            q4[0, interface:] = np.sin(0*np.pi/8)
+        utils.applyBCs_3c(phi, c1, c2, q1, q4, nbc)
+        utils.saveArrays_3c(path, 0, phi, c1, c2, q1, q4)
+    
+    return True
