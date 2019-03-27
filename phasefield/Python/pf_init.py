@@ -10,8 +10,14 @@ def preinitialize(sim_type, path, pathToTDB):
     This file contains all relevant information about the simulation (parameters, simulation type, etc.)
     If an info.txt file already exists at the defined path, abort setup, and 
         notify user to choose a different location or delete the previous data
+    
+    Returns True if initialization is successful, False if not (folder already exists?)
     """
     utils.load_tdb(pathToTDB)
+    if not engine.init_tdb_vars(utils.tdb):
+        print("This TDB file doesn't have the required additional variables needed to run a phase field simulation!")
+        # add required variable names! Important for debugging errors!
+        print("Trying to run the simulation won't work!")
     if(os.path.isfile(path+"info.txt")):
         print("A simulation has already been created at this path - aborting initialization!")
         print("Please choose a different path, or delete the previous simulation")
@@ -22,26 +28,9 @@ def preinitialize(sim_type, path, pathToTDB):
     info.write("---Information about this Phase Field Simulation---\n\n")
     info.write("Simulation type: \n"+sim_type+"\n\n")
     info.write("Material Parameters: \n")
-    info.write("  Mobility/Diffusion Terms: \n")
-    info.write("    Orientational Mobility (M_qmax): "+str(engine.M_qmax)+"\n")
-    info.write("    Order mobility in A (M_A): "+str(engine.M_A)+"\n")
-    info.write("    Order mobility in B (M_B): "+str(engine.M_B)+"\n")
-    if(len(utils.components) == 3):
-        info.write("    Order mobility in C (M_C): "+str(engine.M_C)+"\n")
-    info.write("    Diffusion in liquid (D_L): "+str(engine.D_L)+"\n")
-    info.write("    Diffusion in solid (D_S): "+str(engine.D_S)+"\n")
-    info.write("  Energy Terms: \n")
-    info.write("    Order epsilon term (ebar): "+str(engine.ebar)+"\n")
-    info.write("    Orientation epsilon term (eqbar): "+str(engine.eqbar)+"\n")
     info.write("    Anisotropy of S-L interfacial energy (y_e): "+str(engine.y_e)+"\n")
-    info.write("    Grain boundary energy scaling term (H): "+str(engine.H)+"\n")
-    info.write("    Well height in A (W_A): "+str(engine.W_A)+"\n")
-    info.write("    Well height in B (W_B): "+str(engine.W_B)+"\n")
-    if(len(utils.components) == 3):
-        info.write("    Well height in C (W_C): "+str(engine.W_C)+"\n")
     info.write("    TDB File used: "+pathToTDB+"\n")
     info.write("  Other: \n")
-    info.write("    Molar Volume (v_m): "+str(engine.v_m)+"\n")
     info.write("    Interfacial thickness (d): "+str(engine.d)+"\n\n")
     info.write("Discretization Parameters: \n")
     info.write("    Number of dimensions (dim): "+str(engine.dim)+"\n")
@@ -63,6 +52,8 @@ def initializePlaneFront(rX, rY, path, pathToTDB):
     rX: Width of simulation region
     rY: Height of simulation region
     path: where the phi, c, q1, and q4 field data will be saved
+    
+    Returns True if initialization is successful, False if not (folder already exists?)
     """
     
     sim_type = "  Plane Front:\n    Size: ["+str(rX)+", "+str(rY)+"]"
@@ -107,6 +98,8 @@ def initializeSeeds(rX, rY, nbcX, nbcY, numseeds, path, pathToTDB):
     nbcY: Same as above, but for the y-axis. 
     numseeds: How many seed crystals to initialize
     path: where the phi, c, q1, and q4 field data will be saved
+    
+    Returns True if initialization is successful, False if not (folder already exists?)
     """
     
     sim_type = "  Multiple Seeds:\n    Size: ["+str(rX)+", "+str(rY)+"]\n    Neumann Boundary Conditions: ["+str(nbcX)+", "+str(nbcY)+"]\n    Number of Seeds: "+str(numseeds)
@@ -161,6 +154,8 @@ def initializeSeed(rX, rY, nbcX, nbcY, path, pathToTDB):
     nbcX: Whether Neumann boundary conditions are used along the x-axis. Otherwise, boundary is periodic 
     nbcY: Same as above, but for the y-axis. 
     path: where the phi, c, q1, and q4 field data will be saved
+    
+    Returns True if initialization is successful, False if not (folder already exists?)
     """
     
     sim_type = "  Single Seed:\n    Size: ["+str(rX)+", "+str(rY)+"]\n    Neumann Boundary Conditions: ["+str(nbcX)+", "+str(nbcY)+"]"
@@ -187,16 +182,19 @@ def initializeSeed(rX, rY, nbcX, nbcY, path, pathToTDB):
     q4 = np.zeros(shape)
     q1 += np.cos(0*np.pi/8)
     q4 += np.sin(0*np.pi/8)
+    c = []
     if(len(utils.components) == 2):
-        c = np.zeros(shape)
-        c += 0.40831
+        c1 = np.zeros(shape)
+        c1 += 0.40831
+        c.append(c1)
     #manually doing 3-component for now, will have to rewrite for N component model
     elif(len(utils.components) == 3):
         c1 = np.zeros(shape)
-        c1 += (0.99-0.40831)
+        c1 += 0.01
         c2 = np.zeros(shape)
         c2 += 0.40831
-        #c3 is 0.01 (1% aluminum)
+        c.append(c1)
+        c.append(c2)
 
     randAngle = np.random.rand(seeds)*np.pi/4-np.pi/8
     randX = [resX/2]
@@ -208,14 +206,9 @@ def initializeSeed(rX, rY, nbcX, nbcY, path, pathToTDB):
                     phi[i][j] = 1
                     q1[i][j] = np.cos(randAngle[k])
                     q4[i][j] = np.sin(randAngle[k])
-
-    if(len(utils.components) == 2):
-        utils.applyBCs(c, phi, q1, q4, nbc)
-        utils.saveArrays(path, 0, phi, c, q1, q4)
-    #manually doing 3-component for now, will have to rewrite for N component model
-    elif(len(utils.components) == 3):
-        utils.applyBCs_3c(phi, c1, c2, q1, q4, nbc)
-        utils.saveArrays_3c(path, 0, phi, c1, c2, q1, q4)
+                    
+    utils.applyBCs_nc(phi, c, q1, q4, nbc)
+    utils.saveArrays_nc(path, 0, phi, c, q1, q4)
     return True
 
 def initialize1D(rX, interface, same_ori, num_components, c_a, c_b, path, pathToTDB):
@@ -229,6 +222,8 @@ def initialize1D(rX, interface, same_ori, num_components, c_a, c_b, path, pathTo
     c_b: same, but in the second region
     path: where the phi, c_i, q1, and q4 field data will be saved
     pathToTDB: where the TDB file for the thermodynamics can be found
+    
+    Returns True if initialization is successful, False if not (folder already exists?)
     """
     
     sim_type = "  1-Dimension:\n    Size: ["+str(rX)+"]\n    c_a: "+str(c_a)+", c_b: "+str(c_b)+"\n    Thermodynamics: "+pathToTDB

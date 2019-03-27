@@ -7,47 +7,73 @@ import pf_utils as utils
 dim = 2
 
 #material parameters, J, cm, K, s
-M_qmax = 80000000./1574. #maximum mobility of orientation, 1/(s*J)
-H = 1e-11 #interfacial energy term for quaternions, J/(K*cm)
-
-#material parameters, mostly from Warren1995, some exceptions (anisotropy, e_SX, C_X)
-T_mA = 1728. #melting point of nickel
-T_mB = 1358. #melting point of copper
-T_mC = 933.5 #melting point of aluminum
-L_A = 2350. #latent heat of nickel, J/cm3
-L_B = 1728. #latent heat of copper, J/cm3
-L_C = 1080. #latent heat of aluminum, J/cm^3
-s_A = 0.000037 #surface energy of nickel, J/cm2
-s_B = 0.000029 #surface energy of copper, J/cm2
-s_C = 0.00002 #surface energy of aluminum, J/cm^2 
-D_L = 1e-5 #diffusion in liquid, cm2/s
-D_S = 1e-9 #diffusion in solid, cm2/s
-B_A = 0.33 #linear kinetic coefficient of nickel, cm/K/s
-B_B = 0.39 #linear kinetic coefficient of copper, cm/K/s
-B_C = 0.36 #lkc of aluminum, cm/K/s. Complete guess (close to other values?)
-v_m = 7.42 #molar volume, cm3/mol. ASSUME ALL ELEMENTS HAVE SAME MOLAR VOLUME
 R = 8.314 #gas constant, J/mol*K
 y_e = 0.12 #anisotropy
-#y_e = 0.0 #no anisotropy
-#e_SA = 6395. #enthalpy of solid Nickel at melting point, J/cm3 (Desai1987)
-#e_SB = 4023. #enthalpy of solid Copper at melting point, J/cm3 (Arblaster2015)
-#C_A = 5.525 #average heat capacity of nickel at melting point, J/cm3/K  (Desai1987)
-#C_B = 4.407 #average heat capacity of copper at melting point, J/cm3/K  (Arblaster2015)
 
 #discretization params
 dx = 4.6e-6 #spacial division, cm
-dt = dx*dx/5./D_L/8
+dt = 0
 d = dx/0.94 #interfacial thickness
 
-#discretization dependent params, since d is constant, we compute them here for now
-ebar = np.sqrt(6*np.sqrt(2)*s_A*d/T_mA) #baseline energy
-eqbar = 0.5*ebar
-W_A = 3*s_A/(np.sqrt(2)*T_mA*d)
-W_B = 3*s_B/(np.sqrt(2)*T_mB*d)
-W_C = 3*s_C/(np.sqrt(2)*T_mC*d)
-M_A = T_mA*T_mA*B_A/(6*np.sqrt(2)*L_A*d)/1574.
-M_B = T_mB*T_mB*B_B/(6*np.sqrt(2)*L_B*d)/1574.
-M_C = T_mC*T_mC*B_C/(6*np.sqrt(2)*L_C*d)/1574.
+#TDB parameters, lists are used for N-component models since we dont know how many variables we need
+L = [] #latent heats, J/cm^3
+T_M = [] #melting temperatures, K
+S = [] #surface energies, J/cm^2
+B = [] #linear kinetic coefficients, cm/(K*s)
+W = [] #Well size
+M = [] #Order mobility coefficient
+D_S = 0 #Diffusion in solid, cm^2/s
+D_L = 0 #Diffusion in liquid, cm^2/s
+v_m = 0 #Molar volume, cm^3/mol
+M_qmax = 0 #maximum orientational mobility, 1/(s*J)
+H = 0 #Orientational Interface energy, J/(K*cm)
+ebar = 0 #epsilon_phi
+eqbar = 0 #epsilon_q
+
+#fields, to allow for access outside the simulate function (debugging!)
+phi = 0
+c = []
+q1 = 0
+q4 = 0
+T = 0
+
+def init_tdb_vars(tdb):
+    """
+    Modifies the global vars which are parameters for the engine. Called from the function utils.preinitialize
+    Returns True if variables are loaded successfully, False if certain variables dont exist in the TDB
+    If false, preinitialize will print an error saying the TDB doesn't have enough info to run the sim
+    """
+    global L, T_M, S, B, W, M, D_S, D_L, v_m, M_qmax, H, ebar, eqbar, dt
+    comps = utils.components
+    try:
+        L = [] #latent heats, J/cm^3
+        T_M = [] #melting temperatures, K
+        S = [] #surface energies, J/cm^2
+        B = [] #linear kinetic coefficients, cm/(K*s)
+        W = [] #Well size
+        M = [] #Order mobility coefficient
+        T = tdb.symbols[comps[0]+"_L"].free_symbols.pop()
+        for i in range(len(comps)):
+            L.append(utils.npvalue(T, comps[i]+"_L", tdb))
+            T_M.append(utils.npvalue(T, comps[i]+"_TM", tdb))
+            S.append(utils.npvalue(T, comps[i]+"_S", tdb))
+            B.append(utils.npvalue(T, comps[i]+"_B", tdb))
+            W.append(3*S[i]/(np.sqrt(2)*T_M[i]*d))
+            M.append(T_M[i]*T_M[i]*B[i]/(6*np.sqrt(2)*L[i]*d)/1574.)
+        D_S = utils.npvalue(T, "D_S", tdb)
+        D_L = utils.npvalue(T, "D_L", tdb)
+        v_m = utils.npvalue(T, "V_M", tdb)
+        M_qmax = utils.npvalue(T, "M_Q", tdb)
+        H = utils.npvalue(T, "H", tdb)
+        ebar = np.sqrt(6*np.sqrt(2)*S[1]*d/T_M[1])
+        eqbar = 0.5*ebar
+        dt = dx*dx/5./D_L/8
+        #print(L, T_M, S, B)
+        #print(D_S, D_L, v_m, M_qmax, H, dt)
+        return True
+    except:
+        return False
+    
 
 def simulate(path, nbc, initialStep, steps, initT, gradT, dTdt):
     if not os.path.isfile(path+"info.txt"):
@@ -65,7 +91,7 @@ def simulate(path, nbc, initialStep, steps, initT, gradT, dTdt):
     info.close()
     
     step, phi, c, q1, q4 = utils.loadArrays(path, initialStep)
-    shape = c.shape #get the shape of the simulation region from one of the arrays
+    shape = q1.shape #get the shape of the simulation region from one of the arrays
     
     #temperature
     T = (initT+0.0)*np.ones(shape) #convert T to double just in case
@@ -237,7 +263,8 @@ def simulate(path, nbc, initialStep, steps, initT, gradT, dTdt):
 
     print("Done")
     
-def simulate_3c(path, nbc, initialStep, steps, initT, gradT, dTdt):
+def simulate_nc(path, nbc, initialStep, steps, initT, gradT, dTdt):
+    global phi, c, q1, q4, T
     if not os.path.isfile(path+"info.txt"):
         print("Simulation has not been initialized yet - aborting engine!")
         return
@@ -252,7 +279,8 @@ def simulate_3c(path, nbc, initialStep, steps, initT, gradT, dTdt):
     info.write("    Change in temperature over time (K/time_step): "+str(dTdt)+"\n\n")
     info.close()
     
-    step, phi, c1, c2, q1, q4 = utils.loadArrays_3c(path, initialStep)
+    #load arrays. As of multicomponent model, c is a list of arrays, one per independent component (N-1 total, for an N component model)
+    step, phi, c, q1, q4 = utils.loadArrays_nc(path, initialStep)
     shape = phi.shape #get the shape of the simulation region from one of the arrays
     
     #temperature
@@ -347,21 +375,37 @@ def simulate_3c(path, nbc, initialStep, steps, initT, gradT, dTdt):
                 rgqsr.append(np.sqrt(gqsr[j]))
                 
             #compute values from tdb
-            G_L, dGLdc1, dGLdc2 = utils.compute_tdb_energy_3c(T, c1, c2, "LIQUID")
-            G_S, dGSdc1, dGSdc2 = utils.compute_tdb_energy_3c(T, c1, c2, "FCC_A1")
+            G_L, dGLdc = utils.compute_tdb_energy_nc(T, c, "LIQUID")
+            G_S, dGSdc = utils.compute_tdb_energy_nc(T, c, "FCC_A1")
         
             #change in c1, c2
-            M_c1 = v_m*c1*(D_S+m*(D_L-D_S))/R/1574.
-            M_c2 = v_m*c2*(D_S+m*(D_L-D_S))/R/1574.
-            dFdc1 = (dGSdc1 + m*(dGLdc1-dGSdc1))/v_m + (W_A-W_C)*g*T
-            dFdc2 = (dGSdc2 + m*(dGLdc2-dGSdc2))/v_m + (W_B-W_C)*g*T
-            deltac1 = utils.divagradb(M_c1*(1-c1), dFdc1, dx, dim) - utils.divagradb(M_c1*c2, dFdc2, dx, dim)
-            deltac2 = utils.divagradb(M_c2*(1-c2), dFdc2, dx, dim) - utils.divagradb(M_c2*c1, dFdc1, dx, dim)
+            M_c = []
+            dFdc = []
+            deltac = []
+            for j in range(len(c)):
+                M_c.append(v_m*c[j]*(D_S+m*(D_L-D_S))/R/1574.)
+                dFdc.append((dGSdc[j] + m*(dGLdc[j]-dGSdc[j]))/v_m + (W[j]-W[len(c)])*g*T)
+            for j in range(len(c)):
+                deltac.append(utils.divagradb(M_c[j]*(1-c[j]), dFdc[j], dx, dim))
+                for k in range(len(c)):
+                    if not (j == k):
+                        deltac[j] -= utils.divagradb(M_c[j]*c[k], dFdc[k], dx, dim)
         
             #change in phi
             divTgradphi = utils.divagradb(T, phi, dx, dim)
-            M_phi = c1*M_A + c2*M_B + (1-c1-c2)*M_C
-        
+            
+            #compute overall order mobility, from order mobility coefficients
+            c_N = 1-np.sum(c, axis=0)
+            M_phi = c_N*M[len(c)]
+            for j in range(len(c)):
+                M_phi += c[j]*M[j]
+                
+            #compute well size term for N-components
+            well = c_N*W[len(c)]
+            for j in range(len(c)):
+                well += c[j]*W[j]
+            well *= (T*gprime)
+            
             psix3 = vertex_centered_gpsi[0]*vertex_centered_gpsi[0]*vertex_centered_gpsi[0]
             psiy3 = vertex_centered_gpsi[1]*vertex_centered_gpsi[1]*vertex_centered_gpsi[1]
             pf_comp_x = 8*y_e*T*((2*a2_b2*psix3 + 2*ab2*psiy3)/vertex_centered_mgphi2 - vertex_averaged_gphi[0]*(psix3*vertex_centered_gpsi[0] + psiy3*vertex_centered_gpsi[1])/(vertex_centered_mgphi2*vertex_centered_mgphi2))
@@ -370,10 +414,10 @@ def simulate_3c(path, nbc, initialStep, steps, initT, gradT, dTdt):
             pf_comp_y = 8*y_e*T*((2*a2_b2*psiy3 - 2*ab2*psix3)/vertex_centered_mgphi2 - vertex_averaged_gphi[1]*(psix3*vertex_centered_gpsi[0] + psiy3*vertex_centered_gpsi[1])/(vertex_centered_mgphi2*vertex_centered_mgphi2))
             pf_comp_y = (np.roll(pf_comp_y, -1, 1) - pf_comp_y)/dx
             pf_comp_y = (np.roll(pf_comp_y, -1, 0) + pf_comp_y)/2.
-            deltaphi = M_phi*(ebar*ebar*((1-3*y_e)*divTgradphi + pf_comp_x + pf_comp_y)-30*g*(G_S-G_L)/v_m-W_A*gprime*T*c1-W_B*gprime*T*c2-W_C*gprime*T*(1-c1-c2)-4*H*T*phi*rgqs_0*1574.)
+            deltaphi = M_phi*(ebar*ebar*((1-3*y_e)*divTgradphi + pf_comp_x + pf_comp_y)-30*g*(G_S-G_L)/v_m-well-4*H*T*phi*rgqs_0*1574.)
             randArray = 2*np.random.random_sample(shape)-1
             alpha = 0.3
-            deltaphi += M_phi*alpha*randArray*(16*g)*(30*g*(G_S-G_L)/v_m+W_A*T*gprime*c1+W_B*T*gprime*c2+W_C*T*gprime*(1-c1-c2))
+            deltaphi += M_phi*alpha*randArray*(16*g)*(30*g*(G_S-G_L)/v_m+well)
         
             #changes in q, part 1
             dq_component = 2*H*T*p
@@ -404,12 +448,12 @@ def simulate_3c(path, nbc, initialStep, steps, initT, gradT, dTdt):
     
     
         #apply changes
-        c1 += deltac1*dt
-        c2 += deltac2*dt
+        for j in range(len(c)):
+            c[j] += deltac[j]*dt
         phi += deltaphi*dt
         q1 += deltaq1*dt
         q4 += deltaq4*dt
-        utils.applyBCs_3c(phi, c1, c2, q1, q4, nbc)
+        utils.applyBCs_nc(phi, c, q1, q4, nbc)
         T += dTdt
         if(i%10 == 0):
             q1, q4 = utils.renormalize(q1, q4)
@@ -421,7 +465,7 @@ def simulate_3c(path, nbc, initialStep, steps, initT, gradT, dTdt):
     
         #This code segment saves the arrays every 1000 steps
         if(step%500 == 0):
-            utils.saveArrays_3c(path, step, phi, c1, c2, q1, q4)
+            utils.saveArrays_nc(path, step, phi, c, q1, q4)
 
     print("Done")
 

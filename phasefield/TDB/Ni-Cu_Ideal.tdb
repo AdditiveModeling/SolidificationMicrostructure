@@ -5,8 +5,6 @@ $-------------------------------------------------------------------------------
 
 ELEMENT CU	FCC_A1                       63.546           5004          33.15 !
 Element NI  FCC_A1                       58.693           4787          29.796 !
-ELEMENT VA	Vacancy                           0              0              0 !
-
 
 FUNCTION G_CU_FCC  298.15  -7770.46+130.485*T-24.1124*T*LN(T)-0.00265684*T**2+52478*T**(-1)+1.29223e-007*T**3; 1357.77 Y
 	-13542+183.804*T-31.38*T*LN(T)+3.642e+029*T**(-9); 3200 N !
@@ -30,4 +28,37 @@ Constituent Liquid : CU, NI : !
 Parameter G(Liquid, CU; 0) 298.15  G_CU_LIQUID; 6000 N !
 Parameter G(Liquid, NI; 0) 298.15  G_NI_LIQUID; 6000 N !
 
+$ Interfacial parameters/other necessary variables
 
+$ Latent heat, J/cm^3 (could get this from pycalphad, but easier to just input for now!)
+FUNCTION AL_L 0 1080; 6000 N !
+FUNCTION CU_L 0 1728; 6000 N !
+FUNCTION NI_L 0 2350; 6000 N !	 
+
+$ Melting Point, K (could also get this from pycalphad)
+FUNCTION AL_TM 0 933.5; 6000 N !
+FUNCTION CU_TM 0 1358; 6000 N !
+FUNCTION NI_TM 0 1728; 6000 N !
+
+$ Surface energy, J/cm^2
+FUNCTION AL_S 0 0.00002; 6000 N !
+FUNCTION CU_S 0 0.000029; 6000 N !
+FUNCTION NI_S 0 0.000037; 6000 N !
+
+$ Linear kinetic coefficient, cm/(K*s)
+FUNCTION AL_B 0 0.36; 6000 N !
+FUNCTION CU_B 0 0.39; 6000 N !
+FUNCTION NI_B 0 0.33; 6000 N !
+
+$ Molar Volume, cm^3/mol
+FUNCTION V_M 0 7.42; 6000 N !
+
+$ Diffusion of solute, cm^2/s
+FUNCTION D_L 0 0.00001; 6000 N !
+FUNCTION D_S 0 0.000000001; 6000 N !
+
+$ Orientational Mobility, 1/(s*J)
+FUNCTION M_Q 0 80000000/1574.0; 6000 N !
+
+$ Orientational energy, J/(K*cm)
+FUNCTION H 0 0.00000000001; 6000 N !

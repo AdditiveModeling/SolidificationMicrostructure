@@ -1,4 +1,5 @@
 import numpy as np
+import sympy as sp
 import os
 from matplotlib.colors import LinearSegmentedColormap
 import matplotlib.pyplot as plt
@@ -11,6 +12,11 @@ phases = ['LIQUID', 'FCC_A1']
 components = ['CU', 'NI']
 
 def compute_tdb_energy(temps, c, phase):
+    """
+    Computes Gibbs Free Energy and its derivative w.r.t. composition, for a given temperature and composition field
+    
+    Returns GM (Molar Gibbs Free Energy) and dGdc (derivative of GM w.r.t. c)
+    """
     flattened_c = c.flatten()
     flattened_expanded_c = np.expand_dims(flattened_c, axis=1)
     flattened_expanded_binary_c = np.concatenate((flattened_expanded_c, 1-flattened_expanded_c), axis=1)
@@ -21,39 +27,54 @@ def compute_tdb_energy(temps, c, phase):
     GM_2 = pyc.calculate(tdb, components, phase, P=101325, T=flattened_t, points=feb_c_offset, broadcast=False).GM.values.reshape(c.shape)
     return GM, (GM_2-GM)*(10000000.)
 
-def compute_tdb_energy_3c(temps, c1, c2, phase):
-    #the order is aluminum, copper, nickel in the TDB calculate function (alphabetical!)
-    flattened_c1 = c1.flatten()
-    f_expanded_c1 = np.expand_dims(flattened_c1, axis=1)
-    flattened_c2 = c2.flatten()
-    f_expanded_c2 = np.expand_dims(flattened_c2, axis=1)
-    flattened_expanded_trinary_c = np.concatenate((1-f_expanded_c1-f_expanded_c2, f_expanded_c2, f_expanded_c1), axis=1)
+def compute_tdb_energy_nc(temps, c, phase):
+    """
+    Computes Gibbs Free Energy and its derivative*S* w.r.t. composition, for a given temperature field and list of composition fields
+    Derivatives are computed by holding all other explicit composition variables constant
+    c_i is increased, c_N is decreased (the implicitly-defined last composition variable which equals 1-sum(c_i) )
+    
+    Returns GM (Molar Gibbs Free Energy) and dGdci (list of derivatives of GM, w.r.t. c_i)
+    """
+    #alphabetical order of components!
+    fec = [] #flattened expanded c
+    for i in range(len(c)):
+            fec.append(np.expand_dims(c[i].flatten(), axis=1))
+    fec_n_comp = np.ones(fec[0].shape)
+    for i in range(len(c)):
+        fec_n_comp -= fec[i]
+    for i in range(len(c)):
+        fec_n_comp = np.concatenate((fec_n_comp, fec[i]), axis=1)
+    #move final component to end, maybe ill find a way to write this better in the future...
+    fec_n_comp = np.roll(fec_n_comp, -1, axis=1)
     #offset composition, for computing slope of GM w.r.t. comp
-    fet_c1_offset = flattened_expanded_trinary_c+np.array([-0.0000001, 0., 0.0000001])
-    fet_c2_offset = flattened_expanded_trinary_c+np.array([-0.0000001, 0.0000001, 0.])
+    fec_nc_offset = []
+    for i in range(len(c)):
+        fec_offset = np.zeros([len(c)+1])
+        fec_offset[i] = 0.0000001
+        fec_offset[len(c)] = -0.0000001
+        fec_nc_offset.append(fec_n_comp+fec_offset)
     flattened_t = temps.flatten()
-    GM = pyc.calculate(tdb, components, phase, P=101325, T=flattened_t, points=flattened_expanded_trinary_c, broadcast=False).GM.values.reshape(c1.shape)
-    GM_2 = pyc.calculate(tdb, components, phase, P=101325, T=flattened_t, points=fet_c1_offset, broadcast=False).GM.values.reshape(c1.shape)
-    GM_3 = pyc.calculate(tdb, components, phase, P=101325, T=flattened_t, points=fet_c2_offset, broadcast=False).GM.values.reshape(c1.shape)
-    return GM, (GM_2-GM)*(10000000.), (GM_3-GM)*(10000000.)
+    GM = pyc.calculate(tdb, components, phase, P=101325, T=flattened_t, points=fec_n_comp, broadcast=False).GM.values.reshape(c[0].shape)
+    GM_derivs = []
+    for i in range(len(c)):
+        GM_derivs.append((pyc.calculate(tdb, components, phase, P=101325, T=flattened_t, points=fec_nc_offset[i], broadcast=False).GM.values.reshape(c[0].shape)-GM)*(10000000.))
+    return GM, GM_derivs
 
 def load_tdb(path):
+    """
+    loads the TDB file at the specified path, and updates global variables accordingly
+    """
     global tdb
     global phases
     global components
     tdb = pyc.Database(rootFolder + '/' + path)
     
     #update phases
-    # will automatically updates "phases" for multiphase model. For now, phases is hardcoded
+    # will automatically update "phases" in multiphase model. For now, phases is hardcoded
     
     #update components
-    firstphase = tdb.phases[next(iter(tdb.phases.keys()))]
-    ic = iter(firstphase.constituents[0])
-    comp_array = []
-    for i in range(len(firstphase.constituents[0])):
-        comp = next(iter(next(ic).constituents))
-        comp_array.append(comp)
-    components = comp_array
+    components = list(tdb.elements)
+    components.sort()
 
 def __h(phi):
     #h function from Dorr2010
@@ -139,13 +160,14 @@ def loadArrays(path, timestep):
     _phi = np.load(path+'phi_'+str(timestep)+'.npy')
     return timestep, _phi, _c, _q1, _q4
 
-def loadArrays_3c(path, timestep):
+def loadArrays_nc(path, timestep):
     _q1 = np.load(path+'q1_'+str(timestep)+'.npy')
     _q4 = np.load(path+'q4_'+str(timestep)+'.npy')
-    _c1 = np.load(path+'c1_'+str(timestep)+'.npy')
-    _c2 = np.load(path+'c2_'+str(timestep)+'.npy')
+    _c = []
+    for i in range(len(components)-1):
+        _c.append(np.load(path+'c'+str(i+1)+'_'+str(timestep)+'.npy'))
     _phi = np.load(path+'phi_'+str(timestep)+'.npy')
-    return timestep, _phi, _c1, _c2, _q1, _q4
+    return timestep, _phi, _c, _q1, _q4
 
 def saveArrays(path, timestep, phi, c, q1, q4):
     np.save(path+'phi_'+str(timestep), phi)
@@ -153,10 +175,10 @@ def saveArrays(path, timestep, phi, c, q1, q4):
     np.save(path+'q1_'+str(timestep), q1)
     np.save(path+'q4_'+str(timestep), q4)
     
-def saveArrays_3c(path, timestep, phi, c1, c2, q1, q4):
+def saveArrays_nc(path, timestep, phi, c, q1, q4):
     np.save(path+'phi_'+str(timestep), phi)
-    np.save(path+'c1_'+str(timestep), c1)
-    np.save(path+'c2_'+str(timestep), c2)
+    for i in range(len(c)):
+        np.save(path+'c'+str(i+1)+'_'+str(timestep), c[i])
     np.save(path+'q1_'+str(timestep), q1)
     np.save(path+'q4_'+str(timestep), q4)
     
@@ -180,12 +202,11 @@ def applyBCs(phi, c, q1, q4, nbc):
         q4[0,:] = q4[1,:]
         q4[-1,:] = q4[-2,:]
         
-def applyBCs_3c(phi, c1, c2, q1, q4, nbc):
+def applyBCs_nc(phi, c, q1, q4, nbc):
     if(nbc[0]):
-        c1[:,0] = c1[:,1]
-        c1[:,-1] = c1[:,-2]
-        c2[:,0] = c2[:,1]
-        c2[:,-1] = c2[:,-2]
+        for i in range(len(c)):
+            c[i][:,0] = c[i][:,1]
+            c[i][:,-1] = c[i][:,-2]
         phi[:,0] = phi[:,1]
         phi[:,-1] = phi[:,-2]
         q1[:,0] = q1[:,1]
@@ -193,10 +214,9 @@ def applyBCs_3c(phi, c1, c2, q1, q4, nbc):
         q4[:,0] = q4[:,1]
         q4[:,-1] = q4[:,-2]
     if(nbc[1]):
-        c1[0,:] = c1[1,:]
-        c1[-1,:] = c1[-2,:]
-        c2[0,:] = c2[1,:]
-        c2[-1,:] = c2[-2,:]
+        for i in range(len(c)):
+            c[i][0,:] = c[i][1,:]
+            c[i][-1,:] = c[i][-2,:]
         phi[0,:] = phi[1,:]
         phi[-1,:] = phi[-2,:]
         q1[0,:] = q1[1,:]
@@ -243,7 +263,7 @@ def plotImages(phi, c, q4, nbc, path, step):
     cbar = fig.colorbar(cax, ticks=[np.min(q4), np.max(q4)])
     plt.savefig(path+'q4_'+str(step)+'.png')
     
-def plotImages_3c(phi, c1, c2, q4, nbc, path, step):
+def plotImages_nc(phi, c, q4, nbc, path, step):
     """
     Plots the phi (order), c (composition), and q4 (orientation component) fields for a given step
     Saves images to the defined path
@@ -259,18 +279,27 @@ def plotImages_3c(phi, c1, c2, q4, nbc, path, step):
     cax = plt.imshow(coreSection(phi, nbc), cmap=cm2)
     cbar = fig.colorbar(cax, ticks=[np.min(phi), np.max(phi)])
     plt.savefig(path+'phi_'+str(step)+'.png')
+    for i in range(len(c)):
+        fig, ax = plt.subplots()
+        plt.title('c_'+components[i])
+        cax = plt.imshow(coreSection(c[i], nbc), cmap=cm)
+        cbar = fig.colorbar(cax, ticks=[np.min(c[i]), np.max(c[i])])
+        plt.savefig(path+'c'+str(i+1)+'_'+str(step)+'.png')
+    c_N = 1-np.sum(c, axis=0)
     fig, ax = plt.subplots()
-    plt.title('c1')
-    cax = plt.imshow(coreSection(c1, nbc), cmap=cm)
-    cbar = fig.colorbar(cax, ticks=[np.min(c1), np.max(c1)])
-    plt.savefig(path+'c1_'+str(step)+'.png')
-    fig, ax = plt.subplots()
-    plt.title('c2')
-    cax = plt.imshow(coreSection(c2, nbc), cmap=cm)
-    cbar = fig.colorbar(cax, ticks=[np.min(c2), np.max(c2)])
-    plt.savefig(path+'c2_'+str(step)+'.png')
+    plt.title('c_'+components[len(c)])
+    cax = plt.imshow(coreSection(c_N, nbc), cmap=cm)
+    cbar = fig.colorbar(cax, ticks=[np.min(c_N), np.max(c_N)])
+    plt.savefig(path+'c'+str(len(c)+1)+'_'+str(step)+'.png')
     fig, ax = plt.subplots()
     plt.title('q4')
     cax = plt.imshow(coreSection(q4, nbc), cmap=cm2)
     cbar = fig.colorbar(cax, ticks=[np.min(q4), np.max(q4)])
     plt.savefig(path+'q4_'+str(step)+'.png')
+    
+def npvalue(var, string, tdb):
+    """
+    Returns a numpy float from the sympy expression gotten from pycalphad
+    Reason: some numpy functions (i.e. sqrt) are incompatible with sympy floats!
+    """
+    return sp.lambdify(var, tdb.symbols[string], 'numpy')(1000)
