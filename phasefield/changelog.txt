@@ -1,0 +1,67 @@
+1.0: 
+First serialized update to github
+Added this changelog
+Model updated to support N-component simulations
+Non-traditionally-TDB-parameters are now included within the TDB, using pycalphad to extract them. No longer hard-coded!
+
+_______________________________________
+*List of Planned Future Changes (and steps to accomplish them!)*
+
+Expand model to allow for multi-order simulations
+	*Literature survey for how this has been done before
+	*Write out complete functional expression for 3-phase, N-component model
+	*Modify code to allow for 3-phase simulations
+	*Test code to ensure no bugs exist
+	*Compare results with experimental conditions (solidification of isomorphous eutectic vs. two solid phase eutectic)
+	*Rewrite functional expression for full n-phase model
+	*Modify code to allow for n-phase
+	*Test n-phase code
+
+Add Langevin noise to model
+	*Add noise term for simplest version of code (2-phase, 2-component)
+	*Expand noise to multi-component, using the original derivation of the noise expression
+	*Expand noise further when multi-order, multi-component model is complete
+	*Compute physically sound noise amplitudes which respect the actual physics of solidification
+
+Fix pf_engine.py file to allow for command-line execution
+	*Adjust parameters in the if __name__ == __main__: section
+	*Follow good programming style - use optional arguments and write descriptive help text
+
+Allow pf_init.py file to be run from the command line to initialize a simulation
+	*Copy relevant sections from pf_engine as a template
+	*write descriptive docstrings for each simulation type to explicitly state what params are needed for each sim - and which may be considered optional
+	*include help option to list possible simulations which may be created
+
+Expand and cleanup pf_utils
+	*1D plots for simulations with a width of 1, to better show the value of each field. Color plots are good to show relative values, but not absolute and certainly not with any precision
+	*Move a significant chunk of the pf_engine code into pf_utils functions, to make what's happening in pf_engine more readable.
+	*Docstrings for all functions within pf_utils
+	*Combine certain redundant functions: grad2 for example is a special case of divagradb, with 'a' being 1
+
+Cleanup pf_engine
+	*Some code fragments within pf_engine are left over from previous versions of the code, and are unnecessary and waste time in the simulation.
+	*Remove obsolete simulate function, replace with simulate_nc as the only simulate function which works for all cases (any number of components, and in the future, any number of phases)
+
+Rewrite MMSP code to keep it up-to-date with the state of the python code
+	*MMSP version is currently the isothermal binary model.
+	*Likely unnecessary until python model is completed
+
+Move MMSP code to the new, GPU compatible version of MMSP
+	*Also unnecessary until the python model is complete, and absolutely doesn't need to be done until the Volta/Power9 supercomputer is nearly operational
+
+Compile python code as a library which may be downloaded through anaconda
+	*Currently unsure of exactly how to do this. First step is therefore to learn how this process works.
+
+Keep writing the tutorial ipynb file for the python code, to help other people use it
+	*Paragraphs which describe the functional expression, and what each part of it means
+	*Math used to solve the functional expression and get the rate equations
+	*Paragraphs on describing exactly how the rate equations are discretized
+	*Sample codes for simple, example solidification problems
+
+Fix rate-equations.ipynb file
+	*Figure out how to get sympy to allow gradients to not be carried through - in the code gradients are computed implicitly as a finite difference
+	*Update expressions to most recent version of the functional
+
+
+
+

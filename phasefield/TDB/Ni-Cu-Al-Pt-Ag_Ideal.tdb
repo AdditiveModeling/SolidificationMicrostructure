@@ -3,10 +3,11 @@ $ 2009 05 07
 $ From: An X. et al., "Phase equilibria of the La–Ni–Cu ternary system at 673 K: Thermodynamic modeling and experimental validation"
 $-----------------------------------------------------------------------------------------------------------------------
 
+ELEMENT AG  FCC_A1                    1.0787E+02  5.7446E+03  4.2551E+01!
 ELEMENT AL  FCC_A1                       26.982           4577          28.322 !
 ELEMENT CU	FCC_A1                       63.546           5004          33.15 !
 ELEMENT NI  FCC_A1                       58.693           4787          29.796 !
-
+ELEMENT PT  FCC_A1                    1.9508E+02  5.7237E+03  4.1631E+01!
 
 FUNCTION G_CU_FCC  298.15  -7770.46+130.485*T-24.1124*T*LN(T)-0.00265684*T**2+52478*T**(-1)+1.29223e-007*T**3; 1357.77 Y
 	-13542+183.804*T-31.38*T*LN(T)+3.642e+029*T**(-9); 3200 N !
@@ -33,40 +34,74 @@ FUNCTION G_AL_LIQUID  298.15 +3028.879+125.251171*T
    -271.21+211.206579*T-38.5844296*T*LN(T)+.018531982*T**2-5.764227E-06*T**3
   +74092*T**(-1)+7.9337E-20*T**7; 933.47 Y
    -795.996+177.430178*T-31.748192*T*LN(T); 6000 N !
+   
+FUNCTION G_PT_FCC 298.15 -7595.631+124.388275*T
+  -24.5526*T*LN(T)-.00248297*T**2-2.0138E-08*T**3+7974*T**(-1);  1.30000E+03 
+   Y
+   -9253.174+161.529615*T-30.2527*T*LN(T)+.002321665*T**2-6.56946E-07*T**3
+  -272106*T**(-1);  2.04150E+03  Y
+   -222048.216+1019.35892*T-136.192996*T*LN(T)+.020454938*T**2
+  -7.59259E-07*T**3+71539020*T**(-1);  4.00000E+03  N !
 	 
-
+FUNCTION G_PT_LIQUID 298.15 +12518.385+115.113092*T
+  -24.5526*T*LN(T)-.00248297*T**2-2.0138E-08*T**3+7974*T**(-1);  6.00000E+02 
+   Y
+   +19023.491+32.94182*T-12.3403769*T*LN(T)-.011551507*T**2+9.31516E-07*T**3
+  -601426*T**(-1);  2.04150E+03  Y
+   +1404.468+205.858962*T-36.5*T*LN(T);  4.00000E+03  N !
+   
+FUNCTION G_AG_FCC    2.98150E+02  -7209.512+118.202013*T-23.8463314*T*LN(T)
+     -.001790585*T**2-3.98587E-07*T**3-12011*T**(-1);  1.23493E+03  Y
+      -15095.252+190.266404*T-33.472*T*LN(T)+1.412E+29*T**(-9);  6.00000E+03 
+      N !
+	  
+FUNCTION G_AG_LIQUID 298.15  +11025.076-8.891021*T
+  -1.034E-20*T**7+G_AG_FCC;  1.23508E+03  Y
+   +11508.141-9.301747*T-1.412E+29*T**(-9)+G_AG_FCC;  6.00000E+03  N !
 
 Phase FCC_A1 % 1 1 !
-Constituent FCC_A1 : AL, CU, NI : !
+Constituent FCC_A1 : AG, AL, CU, NI, PT : !
+Parameter G(FCC_A1, AG; 0) 298.15  G_AG_FCC; 6000 N !
 Parameter G(FCC_A1, AL ;0) 298.15  G_AL_FCC; 6000 N !
 Parameter G(FCC_A1, CU; 0) 298.15  G_CU_FCC; 6000 N !
 Parameter G(FCC_A1, NI; 0) 298.15  G_NI_FCC; 6000 N !
+Parameter G(FCC_A1, PT; 0) 298.15  G_PT_FCC; 6000 N !
 
 Phase Liquid % 1 1 !
-Constituent Liquid : AL, CU, NI : !
+Constituent Liquid : AG, AL, CU, NI, PT : !
+Parameter G(Liquid, AG; 0) 298.15  G_AG_LIQUID; 6000 N !
 Parameter G(Liquid, AL; 0) 298.15  G_AL_LIQUID; 6000 N !
 Parameter G(Liquid, CU; 0) 298.15  G_CU_LIQUID; 6000 N !
 Parameter G(Liquid, NI; 0) 298.15  G_NI_LIQUID; 6000 N !
+Parameter G(Liquid, PT; 0) 298.15  G_PT_LIQUID; 6000 N !
 
 $ Latent heat, J/cm^3 (could get this from pycalphad, but easier to just input for now!)
+FUNCTION AG_L 0 1165.5; 6000 N !
 FUNCTION AL_L 0 1080; 6000 N !
 FUNCTION CU_L 0 1728; 6000 N !
 FUNCTION NI_L 0 2350; 6000 N !	 
+FUNCTION PT_L 0 2200; 6000 N !
 
 $ Melting Point, K (could also get this from pycalphad)
+FUNCTION AG_TM 0 1235; 6000 N !
 FUNCTION AL_TM 0 933.5; 6000 N !
 FUNCTION CU_TM 0 1358; 6000 N !
 FUNCTION NI_TM 0 1728; 6000 N !
+FUNCTION PT_TM 0 2041; 6000 N !
 
 $ Surface energy, J/cm^2
+FUNCTION AG_S 0 0.0000264; 6000 N !
 FUNCTION AL_S 0 0.00002; 6000 N !
 FUNCTION CU_S 0 0.000029; 6000 N !
 FUNCTION NI_S 0 0.000037; 6000 N !
+FUNCTION PT_S 0 0.0000437; 6000 N !
 
 $ Linear kinetic coefficient, cm/(K*s)
+FUNCTION AG_B 0 0.36; 6000 N !
 FUNCTION AL_B 0 0.36; 6000 N !
 FUNCTION CU_B 0 0.39; 6000 N !
 FUNCTION NI_B 0 0.33; 6000 N !
+FUNCTION PT_B 0 0.36; 6000 N !
 
 $ Molar Volume, cm^3/mol
 FUNCTION V_M 0 7.42; 6000 N !

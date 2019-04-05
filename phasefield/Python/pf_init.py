@@ -187,7 +187,7 @@ def initializeSeed(rX, rY, nbcX, nbcY, path, pathToTDB):
         c1 = np.zeros(shape)
         c1 += 0.40831
         c.append(c1)
-    #manually doing 3-component for now, will have to rewrite for N component model
+    #manually doing 3+ component for now, will have to rewrite for N component model
     elif(len(utils.components) == 3):
         c1 = np.zeros(shape)
         c1 += 0.01
@@ -195,6 +195,20 @@ def initializeSeed(rX, rY, nbcX, nbcY, path, pathToTDB):
         c2 += 0.40831
         c.append(c1)
         c.append(c2)
+        
+    elif(len(utils.components) == 5):
+        c1 = np.zeros(shape)
+        c1 += 0.01
+        c2 = np.zeros(shape)
+        c2 += 0.01
+        c3 = np.zeros(shape)
+        c3 += 0.40831
+        c4 = np.zeros(shape)
+        c4 += 0.56169
+        c.append(c1)
+        c.append(c2)
+        c.append(c3)
+        c.append(c4)
 
     randAngle = np.random.rand(seeds)*np.pi/4-np.pi/8
     randX = [resX/2]
