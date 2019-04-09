@@ -1,3 +1,8 @@
+1.0.1:
+Rewrote path format - both TDB paths and data paths now follow a similar, consistent format.
+All paths now explicitly refer to files relative to the root folder.
+Wrote info extraction function - can now get the TDB file used for a particular sim from info.txt, useful for future work in command-line execution
+
 1.0: 
 First serialized update to github
 Added this changelog

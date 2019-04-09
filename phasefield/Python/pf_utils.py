@@ -1,13 +1,14 @@
 import numpy as np
 import sympy as sp
+import re
 import os
 from matplotlib.colors import LinearSegmentedColormap
 import matplotlib.pyplot as plt
 import pycalphad as pyc
 
 #initialize TDB file in pycalphad, from up a dir and in the TDB folder
-rootFolder = os.path.abspath(os.path.dirname(__file__) + '/..')
-tdb = pyc.Database(rootFolder + '/TDB/Ni-Cu.tdb')
+root_folder = os.path.abspath(os.path.dirname(__file__) + '/..')
+tdb = pyc.Database(root_folder + '/TDB/Ni-Cu.tdb')
 phases = ['LIQUID', 'FCC_A1']
 components = ['CU', 'NI']
 
@@ -60,14 +61,14 @@ def compute_tdb_energy_nc(temps, c, phase):
         GM_derivs.append((pyc.calculate(tdb, components, phase, P=101325, T=flattened_t, points=fec_nc_offset[i], broadcast=False).GM.values.reshape(c[0].shape)-GM)*(10000000.))
     return GM, GM_derivs
 
-def load_tdb(path):
+def load_tdb(tdb_path):
     """
     loads the TDB file at the specified path, and updates global variables accordingly
     """
     global tdb
     global phases
     global components
-    tdb = pyc.Database(rootFolder + '/' + path)
+    tdb = pyc.Database(root_folder + '/TDB/' + tdb_path)
     
     #update phases
     # will automatically update "phases" in multiphase model. For now, phases is hardcoded
@@ -153,34 +154,34 @@ def renormalize(q1, q4):
     q = np.sqrt(q1*q1+q4*q4)
     return q1/q, q4/q
 
-def loadArrays(path, timestep):
-    _q1 = np.load(path+'q1_'+str(timestep)+'.npy')
-    _q4 = np.load(path+'q4_'+str(timestep)+'.npy')
-    _c = np.load(path+'c_'+str(timestep)+'.npy')
-    _phi = np.load(path+'phi_'+str(timestep)+'.npy')
+def loadArrays(data_path, timestep):
+    _q1 = np.load(root_folder+"/data/"+data_path+'/q1_'+str(timestep)+'.npy')
+    _q4 = np.load(root_folder+"/data/"+data_path+'/q4_'+str(timestep)+'.npy')
+    _c = np.load(root_folder+"/data/"+data_path+'/c_'+str(timestep)+'.npy')
+    _phi = np.load(root_folder+"/data/"+data_path+'/phi_'+str(timestep)+'.npy')
     return timestep, _phi, _c, _q1, _q4
 
-def loadArrays_nc(path, timestep):
-    _q1 = np.load(path+'q1_'+str(timestep)+'.npy')
-    _q4 = np.load(path+'q4_'+str(timestep)+'.npy')
+def loadArrays_nc(data_path, timestep):
+    _q1 = np.load(root_folder+"/data/"+data_path+'/q1_'+str(timestep)+'.npy')
+    _q4 = np.load(root_folder+"/data/"+data_path+'/q4_'+str(timestep)+'.npy')
     _c = []
     for i in range(len(components)-1):
-        _c.append(np.load(path+'c'+str(i+1)+'_'+str(timestep)+'.npy'))
-    _phi = np.load(path+'phi_'+str(timestep)+'.npy')
+        _c.append(np.load(root_folder+"/data/"+data_path+'/c'+str(i+1)+'_'+str(timestep)+'.npy'))
+    _phi = np.load(root_folder+"/data/"+data_path+'/phi_'+str(timestep)+'.npy')
     return timestep, _phi, _c, _q1, _q4
 
-def saveArrays(path, timestep, phi, c, q1, q4):
-    np.save(path+'phi_'+str(timestep), phi)
-    np.save(path+'c_'+str(timestep), c)
-    np.save(path+'q1_'+str(timestep), q1)
-    np.save(path+'q4_'+str(timestep), q4)
+def saveArrays(data_path, timestep, phi, c, q1, q4):
+    np.save(root_folder+"/data/"+data_path+'/phi_'+str(timestep), phi)
+    np.save(root_folder+"/data/"+data_path+'/c_'+str(timestep), c)
+    np.save(root_folder+"/data/"+data_path+'/q1_'+str(timestep), q1)
+    np.save(root_folder+"/data/"+data_path+'/q4_'+str(timestep), q4)
     
-def saveArrays_nc(path, timestep, phi, c, q1, q4):
-    np.save(path+'phi_'+str(timestep), phi)
+def saveArrays_nc(data_path, timestep, phi, c, q1, q4):
+    np.save(root_folder+"/data/"+data_path+'/phi_'+str(timestep), phi)
     for i in range(len(c)):
-        np.save(path+'c'+str(i+1)+'_'+str(timestep), c[i])
-    np.save(path+'q1_'+str(timestep), q1)
-    np.save(path+'q4_'+str(timestep), q4)
+        np.save(root_folder+"/data/"+data_path+'/c'+str(i+1)+'_'+str(timestep), c[i])
+    np.save(root_folder+"/data/"+data_path+'/q1_'+str(timestep), q1)
+    np.save(root_folder+"/data/"+data_path+'/q4_'+str(timestep), q4)
     
 def applyBCs(phi, c, q1, q4, nbc):
     if(nbc[0]):
@@ -236,7 +237,7 @@ def coreSection(array, nbc):
         returnArray = returnArray[1:-1, :]
     return returnArray
 
-def plotImages(phi, c, q4, nbc, path, step):
+def plotImages(phi, c, q4, nbc, data_path, step):
     """
     Plots the phi (order), c (composition), and q4 (orientation component) fields for a given step
     Saves images to the defined path
@@ -251,19 +252,19 @@ def plotImages(phi, c, q4, nbc, path, step):
     plt.title('phi')
     cax = plt.imshow(coreSection(phi, nbc), cmap=cm2)
     cbar = fig.colorbar(cax, ticks=[np.min(phi), np.max(phi)])
-    plt.savefig(path+'phi_'+str(step)+'.png')
+    plt.savefig(root_folder+"/data/"+data_path+'/phi_'+str(step)+'.png')
     fig, ax = plt.subplots()
     plt.title('c')
     cax = plt.imshow(coreSection(c, nbc), cmap=cm)
     cbar = fig.colorbar(cax, ticks=[np.min(c), np.max(c)])
-    plt.savefig(path+'c_'+str(step)+'.png')
+    plt.savefig(root_folder+"/data/"+data_path+'/c_'+str(step)+'.png')
     fig, ax = plt.subplots()
     plt.title('q4')
     cax = plt.imshow(coreSection(q4, nbc), cmap=cm2)
     cbar = fig.colorbar(cax, ticks=[np.min(q4), np.max(q4)])
-    plt.savefig(path+'q4_'+str(step)+'.png')
+    plt.savefig(root_folder+"/data/"+data_path+'/q4_'+str(step)+'.png')
     
-def plotImages_nc(phi, c, q4, nbc, path, step):
+def plotImages_nc(phi, c, q4, nbc, data_path, step):
     """
     Plots the phi (order), c (composition), and q4 (orientation component) fields for a given step
     Saves images to the defined path
@@ -278,24 +279,24 @@ def plotImages_nc(phi, c, q4, nbc, path, step):
     plt.title('phi')
     cax = plt.imshow(coreSection(phi, nbc), cmap=cm2)
     cbar = fig.colorbar(cax, ticks=[np.min(phi), np.max(phi)])
-    plt.savefig(path+'phi_'+str(step)+'.png')
+    plt.savefig(root_folder+"/data/"+data_path+'/phi_'+str(step)+'.png')
     for i in range(len(c)):
         fig, ax = plt.subplots()
         plt.title('c_'+components[i])
         cax = plt.imshow(coreSection(c[i], nbc), cmap=cm)
         cbar = fig.colorbar(cax, ticks=[np.min(c[i]), np.max(c[i])])
-        plt.savefig(path+'c'+str(i+1)+'_'+str(step)+'.png')
+        plt.savefig(root_folder+"/data/"+data_path+'/c'+str(i+1)+'_'+str(step)+'.png')
     c_N = 1-np.sum(c, axis=0)
     fig, ax = plt.subplots()
     plt.title('c_'+components[len(c)])
     cax = plt.imshow(coreSection(c_N, nbc), cmap=cm)
     cbar = fig.colorbar(cax, ticks=[np.min(c_N), np.max(c_N)])
-    plt.savefig(path+'c'+str(len(c)+1)+'_'+str(step)+'.png')
+    plt.savefig(root_folder+"/data/"+data_path+'/c'+str(len(c)+1)+'_'+str(step)+'.png')
     fig, ax = plt.subplots()
     plt.title('q4')
     cax = plt.imshow(coreSection(q4, nbc), cmap=cm2)
     cbar = fig.colorbar(cax, ticks=[np.min(q4), np.max(q4)])
-    plt.savefig(path+'q4_'+str(step)+'.png')
+    plt.savefig(root_folder+"/data/"+data_path+'/q4_'+str(step)+'.png')
     
 def npvalue(var, string, tdb):
     """
@@ -303,3 +304,13 @@ def npvalue(var, string, tdb):
     Reason: some numpy functions (i.e. sqrt) are incompatible with sympy floats!
     """
     return sp.lambdify(var, tdb.symbols[string], 'numpy')(1000)
+
+def get_tdb_path_for_sim(data_path):
+    with open(root_folder+"/data/"+data_path+"/info.txt") as search:
+        lines = search.readlines()
+        for line in lines:
+            line = line.rstrip()
+            if re.search('TDB File used', line):
+                return re.split(': ', line)[1]
+        #if it can't find this line, this is VERY BAD
+        raise EOFError('Could not find TDB file used for simulation. This is very bad!')

@@ -3,7 +3,7 @@ import pf_utils as utils
 import pf_engine as engine
 import os
 
-def preinitialize(sim_type, path, pathToTDB):
+def preinitialize(sim_type, data_path, tdb_path):
     """
     Used in all initialize functions
     Creates a folder for the simulation that contains an "info.txt" file
@@ -13,23 +13,23 @@ def preinitialize(sim_type, path, pathToTDB):
     
     Returns True if initialization is successful, False if not (folder already exists?)
     """
-    utils.load_tdb(pathToTDB)
+    utils.load_tdb(tdb_path)
     if not engine.init_tdb_vars(utils.tdb):
         print("This TDB file doesn't have the required additional variables needed to run a phase field simulation!")
         # add required variable names! Important for debugging errors!
         print("Trying to run the simulation won't work!")
-    if(os.path.isfile(path+"info.txt")):
+    if(os.path.isfile(utils.root_folder+"/data/"+data_path+"/info.txt")):
         print("A simulation has already been created at this path - aborting initialization!")
         print("Please choose a different path, or delete the previous simulation")
         return False
-    if not os.path.isdir(path):
-        os.makedirs(path)
-    info = open(path+"info.txt", 'w')
+    if not os.path.isdir(utils.root_folder+"/data/"+data_path+"/"):
+        os.makedirs(utils.root_folder+"/data/"+data_path+"/")
+    info = open(utils.root_folder+"/data/"+data_path+"/info.txt", 'w')
     info.write("---Information about this Phase Field Simulation---\n\n")
     info.write("Simulation type: \n"+sim_type+"\n\n")
     info.write("Material Parameters: \n")
     info.write("    Anisotropy of S-L interfacial energy (y_e): "+str(engine.y_e)+"\n")
-    info.write("    TDB File used: "+pathToTDB+"\n")
+    info.write("    TDB File used: /TDB/"+tdb_path+"\n")
     info.write("  Other: \n")
     info.write("    Interfacial thickness (d): "+str(engine.d)+"\n\n")
     info.write("Discretization Parameters: \n")
@@ -45,19 +45,20 @@ def preinitialize(sim_type, path, pathToTDB):
     return True
     
 
-def initializePlaneFront(rX, rY, path, pathToTDB):
+def initializePlaneFront(rX, rY, data_path, tdb_path):
     """
     Initializes a plane front simulation with a pre-generated fluctuation. 
     Used to compare whether the simulation parameters result in planar, cellular, or dendritic growth
     rX: Width of simulation region
     rY: Height of simulation region
-    path: where the phi, c, q1, and q4 field data will be saved
+    data_path: where the phi, c, q1, and q4 field data will be saved
+    tdb_path: which TDB file will be used to run the simulation
     
     Returns True if initialization is successful, False if not (folder already exists?)
     """
     
     sim_type = "  Plane Front:\n    Size: ["+str(rX)+", "+str(rY)+"]"
-    if not preinitialize(sim_type, path, pathToTDB):
+    if not preinitialize(sim_type, data_path, tdb_path):
         return False
     
     nbc = [True, False] #Neumann boundary conditions for x and y dimensions 
@@ -86,10 +87,10 @@ def initializePlaneFront(rX, rY, path, pathToTDB):
                 phi[i][j] = 1.
 
     utils.applyBCs(phi, c, q1, q4, nbc)
-    utils.saveArrays(path, 0, phi, c, q1, q4)
+    utils.saveArrays(data_path, 0, phi, c, q1, q4)
     return True
     
-def initializeSeeds(rX, rY, nbcX, nbcY, numseeds, path, pathToTDB):
+def initializeSeeds(rX, rY, nbcX, nbcY, numseeds, data_path, tdb_path):
     """
     Initializes a simulation with several pre-generated seed crystals, of random orientation. 
     rX: Width of simulation region
@@ -97,13 +98,14 @@ def initializeSeeds(rX, rY, nbcX, nbcY, numseeds, path, pathToTDB):
     nbcX: Whether Neumann boundary conditions are used along the x-axis. Otherwise, boundary is periodic 
     nbcY: Same as above, but for the y-axis. 
     numseeds: How many seed crystals to initialize
-    path: where the phi, c, q1, and q4 field data will be saved
+    data_path: where the phi, c, q1, and q4 field data will be saved
+    tdb_path: which TDB file will be used to run the simulation
     
     Returns True if initialization is successful, False if not (folder already exists?)
     """
     
     sim_type = "  Multiple Seeds:\n    Size: ["+str(rX)+", "+str(rY)+"]\n    Neumann Boundary Conditions: ["+str(nbcX)+", "+str(nbcY)+"]\n    Number of Seeds: "+str(numseeds)
-    if not preinitialize(sim_type, path, pathToTDB):
+    if not preinitialize(sim_type, data_path, tdb_path):
         return False
     
     nbc = [nbcX, nbcY]
@@ -143,23 +145,24 @@ def initializeSeeds(rX, rY, nbcX, nbcY, numseeds, path, pathToTDB):
                     q4[i][j] = np.sin(randAngle[k])
 
     utils.applyBCs(c, phi, q1, q4, nbc)
-    utils.saveArrays(path, 0, phi, c, q1, q4)
+    utils.saveArrays(data_path, 0, phi, c, q1, q4)
     return True
     
-def initializeSeed(rX, rY, nbcX, nbcY, path, pathToTDB):
+def initializeSeed(rX, rY, nbcX, nbcY, data_path, tdb_path):
     """
     Initializes a simulation with a single seed crystal in the center, of random orientation. 
     rX: Width of simulation region
     rY: Height of simulation region
     nbcX: Whether Neumann boundary conditions are used along the x-axis. Otherwise, boundary is periodic 
     nbcY: Same as above, but for the y-axis. 
-    path: where the phi, c, q1, and q4 field data will be saved
+    data_path: where the phi, c, q1, and q4 field data will be saved
+    tdb_path: which TDB file will be used to run the simulation
     
     Returns True if initialization is successful, False if not (folder already exists?)
     """
     
     sim_type = "  Single Seed:\n    Size: ["+str(rX)+", "+str(rY)+"]\n    Neumann Boundary Conditions: ["+str(nbcX)+", "+str(nbcY)+"]"
-    if not preinitialize(sim_type, path, pathToTDB):
+    if not preinitialize(sim_type, data_path, tdb_path):
         return False
     
     nbc = [nbcX, nbcY]
@@ -222,10 +225,10 @@ def initializeSeed(rX, rY, nbcX, nbcY, path, pathToTDB):
                     q4[i][j] = np.sin(randAngle[k])
                     
     utils.applyBCs_nc(phi, c, q1, q4, nbc)
-    utils.saveArrays_nc(path, 0, phi, c, q1, q4)
+    utils.saveArrays_nc(data_path, 0, phi, c, q1, q4)
     return True
 
-def initialize1D(rX, interface, same_ori, num_components, c_a, c_b, path, pathToTDB):
+def initialize1D(rX, interface, same_ori, num_components, c_a, c_b, data_path, tdb_path):
     """
     Initializes a simulation with a solid region on the left, and a liquid region on the right 
     rX: Width of simulation region
@@ -234,14 +237,14 @@ def initialize1D(rX, interface, same_ori, num_components, c_a, c_b, path, pathTo
     num_components: number of components to simulate
     c_a: array giving the for the first N-1 components values in the first region
     c_b: same, but in the second region
-    path: where the phi, c_i, q1, and q4 field data will be saved
-    pathToTDB: where the TDB file for the thermodynamics can be found
+    data_path: where the phi, c_i, q1, and q4 field data will be saved
+    tdb_path: which TDB file will be used to run the simulation
     
     Returns True if initialization is successful, False if not (folder already exists?)
     """
     
-    sim_type = "  1-Dimension:\n    Size: ["+str(rX)+"]\n    c_a: "+str(c_a)+", c_b: "+str(c_b)+"\n    Thermodynamics: "+pathToTDB
-    if not preinitialize(sim_type, path, pathToTDB):
+    sim_type = "  1-Dimension:\n    Size: ["+str(rX)+"]\n    c_a: "+str(c_a)+", c_b: "+str(c_b)
+    if not preinitialize(sim_type, data_path, tdb_path):
         return False
     
     nbc = [True, False]
@@ -266,7 +269,7 @@ def initialize1D(rX, interface, same_ori, num_components, c_a, c_b, path, pathTo
             q1[0, interface:] = np.cos(1*np.pi/8)
             q4[0, interface:] = np.sin(0*np.pi/8)
         utils.applyBCs(c, phi, q1, q4, nbc)
-        utils.saveArrays(path, 0, phi, c, q1, q4)
+        utils.saveArrays(data_path, 0, phi, c, q1, q4)
     #manually doing 3-component for now, will have to rewrite for N component model
     elif(len(utils.components) == 3):
         c1 = np.zeros(shape)
@@ -280,6 +283,6 @@ def initialize1D(rX, interface, same_ori, num_components, c_a, c_b, path, pathTo
             q1[0, interface:] = np.cos(1*np.pi/8)
             q4[0, interface:] = np.sin(0*np.pi/8)
         utils.applyBCs_3c(phi, c1, c2, q1, q4, nbc)
-        utils.saveArrays_3c(path, 0, phi, c1, c2, q1, q4)
+        utils.saveArrays_3c(data_path, 0, phi, c1, c2, q1, q4)
     
     return True

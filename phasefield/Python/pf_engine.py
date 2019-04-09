@@ -75,12 +75,12 @@ def init_tdb_vars(tdb):
         return False
     
 
-def simulate(path, nbc, initialStep, steps, initT, gradT, dTdt):
-    if not os.path.isfile(path+"info.txt"):
+def simulate(data_path, nbc, initialStep, steps, initT, gradT, dTdt):
+    if not os.path.isfile(utils.root_folder+"/data/"+data_path+"/info.txt"):
         print("Simulation has not been initialized yet - aborting engine!")
         return
     
-    info = open(path+"info.txt", 'a')
+    info = open(utils.root_folder+"/data/"+data_path+"/info.txt", 'a')
     info.write("  New Simulation Run:\n")
     info.write("    Initial Step: "+str(initialStep)+"\n")
     info.write("    Number of steps to run: "+str(steps)+"\n")
@@ -90,7 +90,7 @@ def simulate(path, nbc, initialStep, steps, initT, gradT, dTdt):
     info.write("    Change in temperature over time (K/time_step): "+str(dTdt)+"\n\n")
     info.close()
     
-    step, phi, c, q1, q4 = utils.loadArrays(path, initialStep)
+    step, phi, c, q1, q4 = utils.loadArrays(data_path, initialStep)
     shape = q1.shape #get the shape of the simulation region from one of the arrays
     
     #temperature
@@ -259,17 +259,17 @@ def simulate(path, nbc, initialStep, steps, initT, gradT, dTdt):
     
         #This code segment saves the arrays every 1000 steps
         if(step%500 == 0):
-            utils.saveArrays(path, step, phi, c, q1, q4)
+            utils.saveArrays(data_path, step, phi, c, q1, q4)
 
     print("Done")
     
-def simulate_nc(path, nbc, initialStep, steps, initT, gradT, dTdt):
+def simulate_nc(data_path, nbc, initialStep, steps, initT, gradT, dTdt):
     global phi, c, q1, q4, T
-    if not os.path.isfile(path+"info.txt"):
+    if not os.path.isfile(utils.root_folder+"/data/"+data_path+"/info.txt"):
         print("Simulation has not been initialized yet - aborting engine!")
         return
     
-    info = open(path+"info.txt", 'a')
+    info = open(utils.root_folder+"/data/"+data_path+"/info.txt", 'a')
     info.write("  New Simulation Run:\n")
     info.write("    Initial Step: "+str(initialStep)+"\n")
     info.write("    Number of steps to run: "+str(steps)+"\n")
@@ -280,7 +280,7 @@ def simulate_nc(path, nbc, initialStep, steps, initT, gradT, dTdt):
     info.close()
     
     #load arrays. As of multicomponent model, c is a list of arrays, one per independent component (N-1 total, for an N component model)
-    step, phi, c, q1, q4 = utils.loadArrays_nc(path, initialStep)
+    step, phi, c, q1, q4 = utils.loadArrays_nc(data_path, initialStep)
     shape = phi.shape #get the shape of the simulation region from one of the arrays
     
     #temperature
@@ -465,7 +465,7 @@ def simulate_nc(path, nbc, initialStep, steps, initT, gradT, dTdt):
     
         #This code segment saves the arrays every 1000 steps
         if(step%500 == 0):
-            utils.saveArrays_nc(path, step, phi, c, q1, q4)
+            utils.saveArrays_nc(data_path, step, phi, c, q1, q4)
 
     print("Done")
 
