@@ -29,7 +29,7 @@ def preinitialize(sim_type, data_path, tdb_path):
     info.write("Simulation type: \n"+sim_type+"\n\n")
     info.write("Material Parameters: \n")
     info.write("    Anisotropy of S-L interfacial energy (y_e): "+str(engine.y_e)+"\n")
-    info.write("    TDB File used: /TDB/"+tdb_path+"\n")
+    info.write("    TDB File used: "+tdb_path+"\n")
     info.write("  Other: \n")
     info.write("    Interfacial thickness (d): "+str(engine.d)+"\n\n")
     info.write("Discretization Parameters: \n")
