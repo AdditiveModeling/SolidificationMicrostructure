@@ -8,6 +8,7 @@ import pycalphad as pyc
 
 #initialize TDB file in pycalphad, from up a dir and in the TDB folder
 root_folder = os.path.abspath(os.path.dirname(__file__) + '/..')
+tdb_path = 'Ni-Cu.tdb'
 tdb = pyc.Database(root_folder + '/TDB/Ni-Cu.tdb')
 phases = ['LIQUID', 'FCC_A1']
 components = ['CU', 'NI']
@@ -68,6 +69,9 @@ def load_tdb(tdb_path):
     global tdb
     global phases
     global components
+    if not os.path.isfile(root_folder+"/TDB/"+tdb_path):
+        print("utils.load_tdb Error: TDB file does not exist!")
+        return False
     tdb = pyc.Database(root_folder + '/TDB/' + tdb_path)
     
     #update phases
@@ -76,6 +80,7 @@ def load_tdb(tdb_path):
     #update components
     components = list(tdb.elements)
     components.sort()
+    return True
 
 def __h(phi):
     #h function from Dorr2010
@@ -314,3 +319,20 @@ def get_tdb_path_for_sim(data_path):
                 return re.split(': ', line)[1]
         #if it can't find this line, this is VERY BAD
         raise EOFError('Could not find TDB file used for simulation. This is very bad!')
+        
+def get_nbcs_for_sim(data_path):
+    with open(root_folder+"/data/"+data_path+"/info.txt") as search:
+        lines = search.readlines()
+        for line in lines:
+            line = line.rstrip()
+            if re.search('Neumann Boundary Conditions', line):
+                strings = re.split(': ', line)[1].strip("[]").split(',')
+                nbcs = []
+                for string in strings:
+                    if string == "True":
+                        nbcs.append(True)
+                    else:
+                        nbcs.append(False)
+                return nbcs
+        #if it can't find this line, this is VERY BAD
+        raise EOFError('Could not find nbcs used for simulation. This is very bad!')

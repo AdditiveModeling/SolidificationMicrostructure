@@ -8,7 +8,6 @@ dim = 2
 
 #material parameters, J, cm, K, s
 R = 8.314 #gas constant, J/mol*K
-y_e = 0.12 #anisotropy
 
 #discretization params
 dx = 4.6e-6 #spacial division, cm
@@ -29,6 +28,7 @@ M_qmax = 0 #maximum orientational mobility, 1/(s*J)
 H = 0 #Orientational Interface energy, J/(K*cm)
 ebar = 0 #epsilon_phi
 eqbar = 0 #epsilon_q
+y_e = 0.0 #anisotropy
 
 #fields, to allow for access outside the simulate function (debugging!)
 phi = 0
@@ -43,7 +43,7 @@ def init_tdb_vars(tdb):
     Returns True if variables are loaded successfully, False if certain variables dont exist in the TDB
     If false, preinitialize will print an error saying the TDB doesn't have enough info to run the sim
     """
-    global L, T_M, S, B, W, M, D_S, D_L, v_m, M_qmax, H, ebar, eqbar, dt
+    global L, T_M, S, B, W, M, D_S, D_L, v_m, M_qmax, H, ebar, eqbar, dt, y_e
     comps = utils.components
     try:
         L = [] #latent heats, J/cm^3
@@ -65,6 +65,7 @@ def init_tdb_vars(tdb):
         v_m = utils.npvalue(T, "V_M", tdb)
         M_qmax = utils.npvalue(T, "M_Q", tdb)
         H = utils.npvalue(T, "H", tdb)
+        y_e = utils.npvalue(T, "Y_E", tdb)
         ebar = np.sqrt(6*np.sqrt(2)*S[1]*d/T_M[1])
         eqbar = 0.5*ebar
         dt = dx*dx/5./D_L/8
@@ -263,7 +264,7 @@ def simulate(data_path, nbc, initialStep, steps, initT, gradT, dTdt):
 
     print("Done")
     
-def simulate_nc(data_path, nbc, initialStep, steps, initT, gradT, dTdt):
+def simulate_nc(data_path, initialStep, steps, initT, gradT, dTdt):
     global phi, c, q1, q4, T
     if not os.path.isfile(utils.root_folder+"/data/"+data_path+"/info.txt"):
         print("Simulation has not been initialized yet - aborting engine!")
@@ -273,11 +274,16 @@ def simulate_nc(data_path, nbc, initialStep, steps, initT, gradT, dTdt):
     info.write("  New Simulation Run:\n")
     info.write("    Initial Step: "+str(initialStep)+"\n")
     info.write("    Number of steps to run: "+str(steps)+"\n")
-    info.write("    Neumann Boundary Condition array used: ["+str(nbc[0])+", "+str(nbc[1])+"]\n")
     info.write("    Initial Temperature on left edge: "+str(initT)+"\n")
     info.write("    Temperature gradient (K/cell): "+str(gradT)+"\n")
     info.write("    Change in temperature over time (K/time_step): "+str(dTdt)+"\n\n")
     info.close()
+    
+    nbc = utils.get_nbcs_for_sim(data_path)
+    #check to make sure correct TDB isn't already loaded, to avoid having to reinitialize the ufuncs in pycalphad
+    if not utils.tdb_path == utils.get_tdb_path_for_sim(data_path):
+        utils.tdb_path = utils.get_tdb_path_for_sim(data_path)
+        utils.load_tdb(utils.tdb_path)
     
     #load arrays. As of multicomponent model, c is a list of arrays, one per independent component (N-1 total, for an N component model)
     step, phi, c, q1, q4 = utils.loadArrays_nc(data_path, initialStep)
@@ -472,28 +478,13 @@ def simulate_nc(data_path, nbc, initialStep, steps, initT, gradT, dTdt):
 #path, _nbc_x, _nbc_y, initialStep, steps, these are the command line arguments
 
 if __name__ == '__main__':
-    if(len(sys.argv) == 9):
-        path = sys.argv[1]
-        if not os.path.exists(path):
-            os.makedirs(path)
-    
-        #Neumann boundary conditions for y and x dimensions (due to the way arrays are organized). 
-        #if false, its a periodic boundary instead
-        nbc = []
-        if((sys.argv[2] == '1') or (sys.argv[2] == 'true') or (sys.argv[2] == 'True')):
-            nbc.append(True)
-        else:
-            nbc.append(False)
-        if((sys.argv[3] == '1') or (sys.argv[3] == 'true') or (sys.argv[3] == 'True')):
-            nbc.append(True)
-        else:
-            nbc.append(False)
-        
-        initialStep = int(sys.argv[4])
-        steps = int(sys.argv[5])
-        initT = float(sys.argv[6])
-        gradT = float(sys.argv[7])
-        dTdt = float(sys.argv[8])
-        simulate(path, nbc, initialStep, steps, initT, gradT, dTdt)
+    if(len(sys.argv) == 7):
+        data_path = sys.argv[1]
+        initial_step = int(sys.argv[2])
+        steps = int(sys.argv[3])
+        init_T = float(sys.argv[4])
+        grad_T = float(sys.argv[5])
+        dTdt = float(sys.argv[6])
+        simulate_nc(data_path, initial_step, steps, init_T, grad_T, dTdt)
     else:
-        print("Error! Needs exactly 8 additional arguments! (path, nbc_x, nbc_y, initialStep, steps, initT, gradT, dT/dt)")
+        print("Error! Needs exactly 6 additional arguments! (data_path, initial_step, steps, init_T, grad_T, dT/dt)")

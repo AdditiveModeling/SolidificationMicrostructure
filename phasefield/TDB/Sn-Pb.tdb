@@ -1,0 +1,204 @@
+$
+$ 
+$ DATABASE_INFO Database for solder alloys under development'
+$ Compiled by Ursula R. Kattner, NIST, Gaithersburg, MD, USA '
+$ Last update: 30-Nov-1999 !
+$
+$ Phases are wrong! PF is hard-coded for FCC_A1 and LIQUID
+
+ELEMENT PB   FCC_A1                 2.0720E+02  6.8785E+03  6.4785E+01 !
+ELEMENT SN   FCC_A1                 1.1869E+02  6.3220E+03  5.1195E+01 !
+
+
+$-----------------------------------------------------------------------
+$ Model descriptions of the phases
+$-----------------------------------------------------------------------
+
+PHASE LIQUID % 1 1  1.0 !
+   CONSTITUENT LIQUID  :AG,BI,CU,PB,SB,SN: !
+
+PHASE FCC_A1 %  1  1.0 !
+   CONSTITUENT FCC_A1  :PB,SN% : !
+
+
+
+$-----------------------------------------------------------------------
+$ Functions of the pure elements
+$-----------------------------------------------------------------------
+
+FUNCTION GHSERAG  298.15   -7209.512+118.202013*T-23.8463314*T*LN(T)
+                        -.001790585*T**2-3.98587E-07*T**3-12011*T**(-1);
+            1234.93 Y -15095.252+190.266404*T-33.472*T*LN(T)
+                        +1.412E+29*T**(-9);
+            3000.00 N REF: 91Din !
+
+FUNCTION GAGBCC   298.15   +3400.00-1.05*T+GHSERAG; 3000.00 N REF: 91Din ! 
+FUNCTION GAGHCP   298.15    +300.0+0.30*T+GHSERAG; 3000.00 N REF: 91Din ! 
+FUNCTION GAGBCT   298.15   +4184.1+GHSERAG; 3000.00 N REF: 88Che ! 
+
+
+FUNCTION GHSERBI  298.15   -7817.776+128.418925*T-28.4096529*T*LN(T)
+                         +.012338888*T**2-8.381598E-06*T**3; 
+             544.55 Y +30207.022-393.650351*T+51.8556592*T*LN(T)
+                         -.075311163*T**2+1.3499885E-05*T**3
+                         -3616168*T**(-1)+1.661E+25*T**(-9);
+             800.00 Y -11045.664+182.548971*T-35.9824*T*LN(T)
+                         +.0074266*T**2-1.046E-06*T**3
+                         +1.661E+25*T**(-9);
+            1200.00 Y -7581.312+124.77144*T-27.196*T*LN(T)
+                      +1.661E+25*T**(-9);  
+            3000.00 N REF: 91Din !
+
+FUNCTION GBIFCC   298.15    9900-12.5*T+GHSERBI;,,N REF: 91Din !
+FUNCTION GBIHCP   298.15    9900-11.8*T+GHSERBI;,,N REF: 91Din !
+FUNCTION GBIBCT   298.15    13526.3+GHSERBI;,,N REF: 96Lee !
+FUNCTION GBIBCT   298.15    4184.07+GHSERBI;,,N REF: 91Din !
+
+
+FUNCTION GHSERCU  298.15   -7770.458+130.485235*T-24.112392*T*LN(T)
+                        -.00265684*T**2+1.29223E-07*T**3+52478*T**(-1);
+            1357.77 Y -13542.026+183.803828*T-31.38*T*LN(T)
+                        +3.642E+29*T**(-9);
+            3200.00  N REF: 91Din !
+
+FUNCTION GCUBCC   298.15   +4017.0-1.255*T+GHSERCU; 3200.00 N REF: 91Din !
+FUNCTION GCUHCP   298.15    +600.0+0.20*T+GHSERCU; 3200.00 N REF: 91Din !
+FUNCTION GCUBCT   298.15   +4184.0+GHSERCU; 3200.00 N REF: 0 !
+
+
+FUNCTION GHSERPB  298.15   -7650.085+101.700244*T-24.5242231*T*LN(T)
+                         -.00365895*T**2-2.4395E-07*T**3;
+             600.61 Y -10531.095+154.243182*T-32.4913959*T*LN(T)
+                         +.00154613*T**2+8.054E+25*T**(-9);
+            1200.00 Y +4157.616+53.139072*T-18.9640637*T*LN(T)
+                         -.002882943*T**2+9.8144E-08*T**3
+                         -2696755*T**(-1)+8.054E+25*T**(-9);
+            2100.00 N REF: 91Din !
+
+FUNCTION GPBBCT   298.15     489+3.52*T+GHSERPB;,,N REF: 91Din !
+
+
+
+FUNCTION GHSERSN  100.00   -7258.517+122.765451*T-25.858*T*LN(T)
+                         +.00051185*T**2-3.192767E-06*T**3
+                         +18440*T**(-1);
+             250.00 Y -5855.135+65.443315*T-15.961*T*LN(T)
+                         -.0188702*T**2+3.121167E-06*T**3
+                         -61960*T**(-1);
+             505.08 Y +2524.724+4.005269*T-8.2590486*T*LN(T)
+                         -.016814429*T**2+2.623131E-06*T**3
+                         -1081244*T**(-1)-1.2307E+25*T**(-9);
+             800.00 Y -8256.959+138.99688*T-28.4512*T*LN(T)
+                         -1.2307E+25*T**(-9);
+            3000.00 N REF: 91Din !
+
+
+$-----------------------------------------------------------------------
+$ Functions used in excess terms
+$-----------------------------------------------------------------------
+
+FUNCTION UN_ASS   298.15    0; 6000.00 N REF: 0 !
+
+$-----------------------------------------------------------------------
+$ Phase parameters
+$-----------------------------------------------------------------------
+
+$ Phase LIQUID
+
+
+PARAMETER G(LIQUID,PB;0)  298.15   +4672.123-7.750683*T-6.019E-19*T**7
+                                 +GHSERPB#;
+                     600.61 Y +4853.138-8.067136*T-8.054E+25*T**(-9)
+                                 +GHSERPB#;
+                    2100.00 N REF: 91Din !
+
+PARAMETER G(LIQUID,SN;0)  100.00   +7103.092-14.087767*T+1.47031E-18*T**7
+                                 +GHSERSN#;
+                     505.08 Y +6971.587-13.814382*T+1.2307E+25*T**(-9)
+                                 +GHSERSN#;
+                    3000.00 N REF: 91Din !
+
+
+PARAMETER L(LIQUID,PB,SN;0)  298.15  5125+1.46424*T;,,N REF: 81Nga !
+PARAMETER L(LIQUID,PB,SN;1)  298.15  293.82;,,N REF: 81Nga !
+PARAMETER L(LIQUID,PB,SN;0)  298.15  5368+0.93414*T;,,N REF: 89Fec !
+PARAMETER L(LIQUID,PB,SN;1)  298.15  97.8+0.09354*T;,,N REF: 89Fec !
+PARAMETER L(LIQUID,PB,SN;0)  298.15  6200-0.418*T;,,N REF: 95Oht !
+PARAMETER L(LIQUID,PB,SN;0)  298.15  5900-0.418*T;,,N REF: 0 !
+PARAMETER L(LIQUID,PB,SN;1)  298.15  790.0-1.914*T;,,N REF: 95Oht !
+
+$ Phase FCC_A1 (actually BCT_A5 in reality, FCC_A1 is hard-coded in model!)
+
+PARAMETER G(FCC_A1,PB;0)  298.15  +GPBBCT#;,,N REF: 0 !
+PARAMETER G(FCC_A1,SN;0)  298.15  +GHSERSN#;,,N REF: 0 !
+
+PARAMETER L(FCC_A1,PB,SN;0)  298.15  17177.79-11.8066*T;,,N REF: 81Nga !
+PARAMETER L(FCC_A1,PB,SN;0)  298.15  19693.75-15.89485*T;,,N REF: 89Fec !
+PARAMETER L(FCC_A1,PB,SN;0)  298.15  19700.0-15.89*T;,,N REF: 95Oht !
+
+$ Interfacial parameters/other necessary variables
+
+$ Latent heat, J/cm^3 (could get this from pycalphad, but easier to just input for now!)
+FUNCTION SN_L 0 431.5; 6000 N !
+FUNCTION PB_L 0 262.8; 6000 N !	 
+
+$ Melting Point, K (could also get this from pycalphad)
+FUNCTION SN_TM 0 505; 6000 N !
+FUNCTION PB_TM 0 600.6; 6000 N !
+
+$ Surface energy, J/cm^2
+FUNCTION SN_S 0 0.00001; 6000 N !
+FUNCTION SB_S 0 0.000012; 6000 N !
+
+$ Linear kinetic coefficient, cm/(K*s)
+FUNCTION SN_B 0 0.36; 6000 N !
+FUNCTION PB_B 0 0.39; 6000 N !
+
+$ Molar Volume, cm^3/mol
+FUNCTION V_M 0 16.29; 6000 N !
+
+$ Diffusion of solute, cm^2/s
+FUNCTION D_L 0 0.00001; 6000 N !
+FUNCTION D_S 0 0.000000001; 6000 N !
+
+$ Orientational Mobility, 1/(s*J)
+FUNCTION M_Q 0 80000000/1574.0; 6000 N !
+
+$ Orientational energy, J/(K*cm)
+FUNCTION H 0 0.00000000001; 6000 N !
+
+$ Anisotropy
+FUNCTION Y_E 0 0.24; 6000 N !
+
+
+$-----------------------------------------------------------------------
+$  End of parameters
+$-----------------------------------------------------------------------
+
+ REFERENCE LIST
+     NUMBER    SOURCE
+$    81Nga     'T.L. Ngai and Y.A. Chang, CALPHAD 5 (1981) 267-276;
+$               Pb-Sn'
+$    86Hay     'F.H. Hayes, H.L. Lukas, G. Effenberg and G. Petzow,
+$               Z. Metallkd. 77 (1986) 749-754; Ag-Cu, Ag-Pb, Ag-Cu-Pb'
+$    86Jon     'B. Jonsson and J. Agren, Mater. Sci. Tech. 2 (1986) 913-
+$               916; Sb-Sn (modified description)'
+$    89Fec     'H.J. Fecht, M.-X. Zhang, Y.A. Chang and J.H. Perepezko,
+$               Metall. Trans. A 20A (1989) 795-803; Pb-Sn'
+$    90Tep     'O. Teppo, J. Niemela and P. Taskinen, Thermochim. Acta
+$               173 (1990) 137-150; Bi-Cu'
+$    91Din     'A.T. Dinsdale, CALPHAD 15 (1991) 317-425; Unaries'
+$    94Kat     'U.R. Kattner and W.J. Boettinger, J. Electron. Mater. 23
+$               (1994) 603-610; Ag-Bi, Ag-Bi-Sn'
+$    95Oht     'H. Ohtani, K. Okuda and K. Ishida, J. Phase Equilibria
+$               16 (1995) 416-429; Pb-Sn'
+$    96Lee     'B.-J. Lee, C.-S. Oh and J.-H. Shim, J. Electron. Mater.
+$               25 (1996) 983-991; Bi-Sn, In-Sn'
+$    96Oh      'C.-S.Oh, J.-H. Shim, B.-J. Lee and D.N. Lee, J. Alloys
+$               Comp. 238 (1996) 155-166; Ag-Sb, Ag-Sn, Ag-Sb-Sn'
+$    96Shi     'J.-H. Shim, C.-S.Oh, B.-J. Lee and D.N. Lee,
+$               Z. Metallkd. 87 (1996) 205-212; Cu-Sn'
+$    98Yoo     'S.W. Yoon and H.M. Lee, CALPHAD 22 (1998) 167-178;
+$               Bi-Pb, Bi-Pb-Sn (L.st. changed from [89Din] to [91Din])'
+$    99Din     'A.T. Dinsdale, NPL, Fcc_a1 update, 1999; Ag-Sn'
+$    99Lee     'B.-J. Lee, KRISS, Fcc_a1 update, 1999; Cu-Sn'

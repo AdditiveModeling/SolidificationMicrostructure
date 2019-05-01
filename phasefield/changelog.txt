@@ -1,3 +1,9 @@
+1.0.2:
+Command-line interfacing for pf_engine and pf_init now works, allows for running code outside of ipynb
+Anisotropy is now contained within the non-standard TDB params
+Changed format for initialization routines
+Simulations now use nbcs stored within the info.txt file
+
 1.0.1:
 Rewrote path format - both TDB paths and data paths now follow a similar, consistent format.
 All paths now explicitly refer to files relative to the root folder.
@@ -27,15 +33,6 @@ Add Langevin noise to model
 	*Expand noise to multi-component, using the original derivation of the noise expression
 	*Expand noise further when multi-order, multi-component model is complete
 	*Compute physically sound noise amplitudes which respect the actual physics of solidification
-
-Fix pf_engine.py file to allow for command-line execution
-	*Adjust parameters in the if __name__ == __main__: section
-	*Follow good programming style - use optional arguments and write descriptive help text
-
-Allow pf_init.py file to be run from the command line to initialize a simulation
-	*Copy relevant sections from pf_engine as a template
-	*write descriptive docstrings for each simulation type to explicitly state what params are needed for each sim - and which may be considered optional
-	*include help option to list possible simulations which may be created
 
 Expand and cleanup pf_utils
 	*1D plots for simulations with a width of 1, to better show the value of each field. Color plots are good to show relative values, but not absolute and certainly not with any precision

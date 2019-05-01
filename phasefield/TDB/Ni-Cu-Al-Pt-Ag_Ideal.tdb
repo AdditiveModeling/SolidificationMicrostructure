@@ -115,3 +115,6 @@ FUNCTION M_Q 0 80000000/1574.0; 6000 N !
 
 $ Orientational energy, J/(K*cm)
 FUNCTION H 0 0.00000000001; 6000 N !
+
+$ Anisotropy
+FUNCTION Y_E 0 0.12; 6000 N !
