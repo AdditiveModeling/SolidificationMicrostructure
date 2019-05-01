@@ -71,6 +71,7 @@ def load_tdb(tdb_path):
     global components
     if not os.path.isfile(root_folder+"/TDB/"+tdb_path):
         print("utils.load_tdb Error: TDB file does not exist!")
+        print("Location checked: "+root_folder+"/TDB/"+tdb_path+"")
         return False
     tdb = pyc.Database(root_folder + '/TDB/' + tdb_path)
     

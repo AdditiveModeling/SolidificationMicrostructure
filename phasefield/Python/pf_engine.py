@@ -485,6 +485,11 @@ if __name__ == '__main__':
         init_T = float(sys.argv[4])
         grad_T = float(sys.argv[5])
         dTdt = float(sys.argv[6])
+        utils.tdb_path = utils.get_tdb_path_for_sim(data_path)
+        utils.load_tdb(utils.tdb_path)
+        init_tdb_vars(utils.tdb)
+        print(L, T_M, S, B)
+        print(D_S, D_L, v_m, M_qmax, H, dt, y_e)
         simulate_nc(data_path, initial_step, steps, init_T, grad_T, dTdt)
     else:
         print("Error! Needs exactly 6 additional arguments! (data_path, initial_step, steps, init_T, grad_T, dT/dt)")
