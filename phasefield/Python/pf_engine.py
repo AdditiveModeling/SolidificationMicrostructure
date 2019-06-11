@@ -388,9 +388,14 @@ def simulate_nc(data_path, initialStep, steps, initT, gradT, dTdt):
             M_c = []
             dFdc = []
             deltac = []
+            #find the standard deviation as an array 
+            std_c=np.sqrt(np.absolute(2*R*T/v_m))
             for j in range(len(c)):
+                #find the actual random noise
+                noise_c=np.random.normal(0, std_c, phi.shape)
                 M_c.append(v_m*c[j]*(D_S+m*(D_L-D_S))/R/1574.)
-                dFdc.append((dGSdc[j] + m*(dGLdc[j]-dGSdc[j]))/v_m + (W[j]-W[len(c)])*g*T)
+                #add the change in noise inside the functional
+                dFdc.append((dGSdc[j] + m*(dGLdc[j]-dGSdc[j]))/v_m + (W[j]-W[len(c)])*g*T+noise_c)
             for j in range(len(c)):
                 deltac.append(utils.divagradb(M_c[j]*(1-c[j]), dFdc[j], dx, dim))
                 for k in range(len(c)):
@@ -421,9 +426,16 @@ def simulate_nc(data_path, initialStep, steps, initT, gradT, dTdt):
             pf_comp_y = (np.roll(pf_comp_y, -1, 1) - pf_comp_y)/dx
             pf_comp_y = (np.roll(pf_comp_y, -1, 0) + pf_comp_y)/2.
             deltaphi = M_phi*(ebar*ebar*((1-3*y_e)*divTgradphi + pf_comp_x + pf_comp_y)-30*g*(G_S-G_L)/v_m-well-4*H*T*phi*rgqs_0*1574.)
-            randArray = 2*np.random.random_sample(shape)-1
-            alpha = 0.3
-            deltaphi += M_phi*alpha*randArray*(16*g)*(30*g*(G_S-G_L)/v_m+well)
+            
+            #old noise from Warren1995:
+            #randArray = 2*np.random.random_sample(shape)-1
+            #alpha = 0.3
+            #deltaphi += M_phi*alpha*randArray*(16*g)*(30*g*(G_S-G_L)/v_m+well)
+            
+            #noise in phi, based on Langevin Noise
+            std_phi=np.sqrt(np.absolute(2*R*M_phi*T/v_m))
+            noise_phi=np.random.normal(0, std_phi, phi.shape)
+            deltaphi += noise_phi
         
             #changes in q, part 1
             dq_component = 2*H*T*p
@@ -469,8 +481,16 @@ def simulate_nc(data_path, initialStep, steps, initT, gradT, dTdt):
             if(i%(steps/20) == 0):
                 print(str(5*i/(steps/20))+"% done...")
     
-        #This code segment saves the arrays every 1000 steps
+        #This code segment saves the arrays every 500 steps, and adds nuclei
+        #note: nuclei are added *before* saving the data, so stray nuclei may be found before evolving the system
         if(step%500 == 0):
+            #find the stochastic nucleation critical probabilistic cutoff
+            #attn -- Q and T_liq are hard coded parameters for Ni-10%Cu
+            Q0=8*10**5 #activation energy of migration
+            T_liq=1697 #Temperature of Liquidus (K)
+            J0,p11=utils.find_Pn(T_liq, T, Q0, dt) 
+            #print(J0)
+            phi, q1, q4=utils.add_nuclei(phi, q1, q4, p11, len(phi))
             utils.saveArrays_nc(data_path, step, phi, c, q1, q4)
 
     print("Done")

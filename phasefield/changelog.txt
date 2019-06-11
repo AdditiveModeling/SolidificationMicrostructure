@@ -1,3 +1,8 @@
+1.1:
+Added Vera's Noise and Nucleation code, replacing the Warren1995 noise
+Begun full derivation of multiorder rate equations, written in phasefield.ipynb
+Minor cleanup of obsolete code from previous model versions
+
 1.0.2:
 Command-line interfacing for pf_engine and pf_init now works, allows for running code outside of ipynb
 Anisotropy is now contained within the non-standard TDB params
@@ -29,8 +34,6 @@ Expand model to allow for multi-order simulations
 	*Test n-phase code
 
 Add Langevin noise to model
-	*Add noise term for simplest version of code (2-phase, 2-component)
-	*Expand noise to multi-component, using the original derivation of the noise expression
 	*Expand noise further when multi-order, multi-component model is complete
 	*Compute physically sound noise amplitudes which respect the actual physics of solidification
 

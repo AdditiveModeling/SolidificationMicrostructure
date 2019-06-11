@@ -353,7 +353,7 @@ if __name__ == '__main__':
                     c0 = []
                     for j in range(len(values)):
                         c0.append(float(values[j]))
-            initializeSeed(sys.argv[2], sys.argv[3], int(lengths[0]), int(lengths[1]), nbcs[0], nbcs[1], c0)
+            initializeSeed(sys.argv[1], sys.argv[2], int(lengths[0]), int(lengths[1]), nbcs[0], nbcs[1], c0)
             
         
     elif sys.argv[1] == 'seeds': #initialize multiple seeds
@@ -411,7 +411,7 @@ if __name__ == '__main__':
                         sys.exit()
                     s = int(temp[1])
                     
-            initializeSeeds(sys.argv[2], sys.argv[3], int(lengths[0]), int(lengths[1]), nbcs[0], nbcs[1], s, c0)
+            initializeSeeds(sys.argv[1], sys.argv[2], int(lengths[0]), int(lengths[1]), nbcs[0], nbcs[1], s, c0)
         
     elif sys.argv[1] == 'plane': #initialize plane-front growth
         if len(sys.argv) == 2: #only does 'python pf_init.py seed'
@@ -429,6 +429,7 @@ if __name__ == '__main__':
             print("Format requires a data_path and a tdb_path at minimum!")
         else:
             lengths = ["200", "200"]
+            nbcs = [False, False]
             c0 = 0
             for i in range(len(sys.argv)-4):
                 temp = sys.argv[i+4].split(':')
@@ -446,10 +447,9 @@ if __name__ == '__main__':
                     c0 = []
                     for j in range(len(values)):
                         c0.append(float(values[j]))
-            initializePlaneFront(sys.argv[2], sys.argv[3], int(lengths[0]), int(lengths[1]), c0)
+            initializeSeed(sys.argv[1], sys.argv[2], int(lengths[0]), int(lengths[1]), nbcs[0], nbcs[1], c0)
         
     elif sys.argv[1] == '1d': #initialize 1-d test simulation
-        #currently broken! need to fix later!
         if len(sys.argv) == 2: #only does 'python pf_init.py seed'
             print("Format for initializing sample single seed simulation:")
             print("    python "+sys.argv[0]+" seed singleseedsimulation Ni-Cu_Ideal.tdb l:50,100 nbc:F,T c:0.40831")
@@ -496,7 +496,7 @@ if __name__ == '__main__':
                     c0 = []
                     for j in range(len(values)):
                         c0.append(float(values[j]))
-            initialize1D(sys.argv[2], sys.argv[3], int(lengths[0]), int(lengths[1]), nbcs[0], nbcs[1], c0)
+            initializeSeed(sys.argv[1], sys.argv[2], int(lengths[0]), int(lengths[1]), nbcs[0], nbcs[1], c0)
         
     elif sys.argv[1] == '--help': #initialize plane-front growth
         print("Phase Field Initialization Script")

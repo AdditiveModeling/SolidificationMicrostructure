@@ -13,6 +13,37 @@ tdb = pyc.Database(root_folder + '/TDB/Ni-Cu.tdb')
 phases = ['LIQUID', 'FCC_A1']
 components = ['CU', 'NI']
 
+def find_Pn(T_M, T, Q ,dt):
+    #finding the probability of forming a critical nucleus, nucleating only every 500 time steps
+    #input: T_M -- temperature of the liquidus, T -- Temperature, Q -- activation energy for migration
+    #choose free parameters a and b
+    #code by Vera Titze
+    a=10**28
+    b=2.8*10**3
+    e=2.7182818284590452353
+    R=8.314
+    J0=a*e**(-b/(T_M-T))*e**(-Q/(R*T))
+    Pn=1-e**(-J0*dt*500)
+    return J0,Pn
+
+def add_nuclei(phi, q1, q4, p11, size):
+    #adds nuclei to the phi, q1, and q4 fields for a given probability array, p11
+    #code by Vera Titze
+    random=np.random.random((size, size))
+    nuclei_centers=np.argwhere(random<p11)
+    print('number of nuclei added: ',len(nuclei_centers))
+    for center in nuclei_centers:
+        angle=np.random.random()
+        for i in range((int)(center[0]-5), (int)(center[0]+5)):
+            for j in range((int)(center[1]-5), (int)(center[1]+5)):
+                if (i>=0 and i<size and j<size and j>=0):
+                    if((i-center[0])*(i-center[0])+(j-center[1])*(j-center[1]) < 25):
+                        if(phi[i][j]<0.2):
+                            phi[i][j] = 1
+                            q1[i][j] = np.cos(angle*2*np.pi)
+                            q4[i][j] = np.sin(angle*2*np.pi)
+    return phi, q1, q4
+
 def compute_tdb_energy(temps, c, phase):
     """
     Computes Gibbs Free Energy and its derivative w.r.t. composition, for a given temperature and composition field
@@ -71,7 +102,6 @@ def load_tdb(tdb_path):
     global components
     if not os.path.isfile(root_folder+"/TDB/"+tdb_path):
         print("utils.load_tdb Error: TDB file does not exist!")
-        print("Location checked: "+root_folder+"/TDB/"+tdb_path+"")
         return False
     tdb = pyc.Database(root_folder + '/TDB/' + tdb_path)
     
