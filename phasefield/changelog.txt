@@ -1,3 +1,7 @@
+1.1.1:
+Finished derivation of multiorder rate equations
+Cleaned up code base - removed all non-multicomponent functions from pf_engine and pf_utils
+
 1.1:
 Added Vera's Noise and Nucleation code, replacing the Warren1995 noise
 Begun full derivation of multiorder rate equations, written in phasefield.ipynb

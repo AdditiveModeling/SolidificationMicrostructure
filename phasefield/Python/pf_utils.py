@@ -44,22 +44,6 @@ def add_nuclei(phi, q1, q4, p11, size):
                             q4[i][j] = np.sin(angle*2*np.pi)
     return phi, q1, q4
 
-def compute_tdb_energy(temps, c, phase):
-    """
-    Computes Gibbs Free Energy and its derivative w.r.t. composition, for a given temperature and composition field
-    
-    Returns GM (Molar Gibbs Free Energy) and dGdc (derivative of GM w.r.t. c)
-    """
-    flattened_c = c.flatten()
-    flattened_expanded_c = np.expand_dims(flattened_c, axis=1)
-    flattened_expanded_binary_c = np.concatenate((flattened_expanded_c, 1-flattened_expanded_c), axis=1)
-    #offset composition, for computing slope of GM w.r.t. comp
-    feb_c_offset = flattened_expanded_binary_c+np.array([0.0000001, -0.0000001])
-    flattened_t = temps.flatten()
-    GM = pyc.calculate(tdb, components, phase, P=101325, T=flattened_t, points=flattened_expanded_binary_c, broadcast=False).GM.values.reshape(c.shape)
-    GM_2 = pyc.calculate(tdb, components, phase, P=101325, T=flattened_t, points=feb_c_offset, broadcast=False).GM.values.reshape(c.shape)
-    return GM, (GM_2-GM)*(10000000.)
-
 def compute_tdb_energy_nc(temps, c, phase):
     """
     Computes Gibbs Free Energy and its derivative*S* w.r.t. composition, for a given temperature field and list of composition fields
@@ -190,13 +174,6 @@ def renormalize(q1, q4):
     q = np.sqrt(q1*q1+q4*q4)
     return q1/q, q4/q
 
-def loadArrays(data_path, timestep):
-    _q1 = np.load(root_folder+"/data/"+data_path+'/q1_'+str(timestep)+'.npy')
-    _q4 = np.load(root_folder+"/data/"+data_path+'/q4_'+str(timestep)+'.npy')
-    _c = np.load(root_folder+"/data/"+data_path+'/c_'+str(timestep)+'.npy')
-    _phi = np.load(root_folder+"/data/"+data_path+'/phi_'+str(timestep)+'.npy')
-    return timestep, _phi, _c, _q1, _q4
-
 def loadArrays_nc(data_path, timestep):
     _q1 = np.load(root_folder+"/data/"+data_path+'/q1_'+str(timestep)+'.npy')
     _q4 = np.load(root_folder+"/data/"+data_path+'/q4_'+str(timestep)+'.npy')
@@ -206,39 +183,13 @@ def loadArrays_nc(data_path, timestep):
     _phi = np.load(root_folder+"/data/"+data_path+'/phi_'+str(timestep)+'.npy')
     return timestep, _phi, _c, _q1, _q4
 
-def saveArrays(data_path, timestep, phi, c, q1, q4):
-    np.save(root_folder+"/data/"+data_path+'/phi_'+str(timestep), phi)
-    np.save(root_folder+"/data/"+data_path+'/c_'+str(timestep), c)
-    np.save(root_folder+"/data/"+data_path+'/q1_'+str(timestep), q1)
-    np.save(root_folder+"/data/"+data_path+'/q4_'+str(timestep), q4)
-    
 def saveArrays_nc(data_path, timestep, phi, c, q1, q4):
     np.save(root_folder+"/data/"+data_path+'/phi_'+str(timestep), phi)
     for i in range(len(c)):
         np.save(root_folder+"/data/"+data_path+'/c'+str(i+1)+'_'+str(timestep), c[i])
     np.save(root_folder+"/data/"+data_path+'/q1_'+str(timestep), q1)
     np.save(root_folder+"/data/"+data_path+'/q4_'+str(timestep), q4)
-    
-def applyBCs(phi, c, q1, q4, nbc):
-    if(nbc[0]):
-        c[:,0] = c[:,1]
-        c[:,-1] = c[:,-2]
-        phi[:,0] = phi[:,1]
-        phi[:,-1] = phi[:,-2]
-        q1[:,0] = q1[:,1]
-        q1[:,-1] = q1[:,-2]
-        q4[:,0] = q4[:,1]
-        q4[:,-1] = q4[:,-2]
-    if(nbc[1]):
-        c[0,:] = c[1,:]
-        c[-1,:] = c[-2,:]
-        phi[0,:] = phi[1,:]
-        phi[-1,:] = phi[-2,:]
-        q1[0,:] = q1[1,:]
-        q1[-1,:] = q1[-2,:]
-        q4[0,:] = q4[1,:]
-        q4[-1,:] = q4[-2,:]
-        
+
 def applyBCs_nc(phi, c, q1, q4, nbc):
     if(nbc[0]):
         for i in range(len(c)):
@@ -273,33 +224,6 @@ def coreSection(array, nbc):
         returnArray = returnArray[1:-1, :]
     return returnArray
 
-def plotImages(phi, c, q4, nbc, data_path, step):
-    """
-    Plots the phi (order), c (composition), and q4 (orientation component) fields for a given step
-    Saves images to the defined path
-    """
-    colors = [(0, 0, 1), (0, 1, 1), (0, 1, 0), (1, 1, 0), (1, 0, 0)]
-    cm = LinearSegmentedColormap.from_list('rgb', colors)
-    colors2 = [(0, 0, 1), (1, 1, 0), (1, 0, 0)]
-    cm2 = LinearSegmentedColormap.from_list('rgb', colors2)
-
-    fig, ax = plt.subplots()
-    plt.rcParams['figure.figsize'] = 4, 4
-    plt.title('phi')
-    cax = plt.imshow(coreSection(phi, nbc), cmap=cm2)
-    cbar = fig.colorbar(cax, ticks=[np.min(phi), np.max(phi)])
-    plt.savefig(root_folder+"/data/"+data_path+'/phi_'+str(step)+'.png')
-    fig, ax = plt.subplots()
-    plt.title('c')
-    cax = plt.imshow(coreSection(c, nbc), cmap=cm)
-    cbar = fig.colorbar(cax, ticks=[np.min(c), np.max(c)])
-    plt.savefig(root_folder+"/data/"+data_path+'/c_'+str(step)+'.png')
-    fig, ax = plt.subplots()
-    plt.title('q4')
-    cax = plt.imshow(coreSection(q4, nbc), cmap=cm2)
-    cbar = fig.colorbar(cax, ticks=[np.min(q4), np.max(q4)])
-    plt.savefig(root_folder+"/data/"+data_path+'/q4_'+str(step)+'.png')
-    
 def plotImages_nc(phi, c, q4, nbc, data_path, step):
     """
     Plots the phi (order), c (composition), and q4 (orientation component) fields for a given step

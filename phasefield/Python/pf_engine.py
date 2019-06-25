@@ -75,195 +75,6 @@ def init_tdb_vars(tdb):
     except:
         return False
     
-
-def simulate(data_path, nbc, initialStep, steps, initT, gradT, dTdt):
-    if not os.path.isfile(utils.root_folder+"/data/"+data_path+"/info.txt"):
-        print("Simulation has not been initialized yet - aborting engine!")
-        return
-    
-    info = open(utils.root_folder+"/data/"+data_path+"/info.txt", 'a')
-    info.write("  New Simulation Run:\n")
-    info.write("    Initial Step: "+str(initialStep)+"\n")
-    info.write("    Number of steps to run: "+str(steps)+"\n")
-    info.write("    Neumann Boundary Condition array used: ["+str(nbc[0])+", "+str(nbc[1])+"]\n")
-    info.write("    Initial Temperature on left edge: "+str(initT)+"\n")
-    info.write("    Temperature gradient (K/cell): "+str(gradT)+"\n")
-    info.write("    Change in temperature over time (K/time_step): "+str(dTdt)+"\n\n")
-    info.close()
-    
-    step, phi, c, q1, q4 = utils.loadArrays(data_path, initialStep)
-    shape = q1.shape #get the shape of the simulation region from one of the arrays
-    
-    #temperature
-    T = (initT+0.0)*np.ones(shape) #convert T to double just in case
-    T += np.linspace(0, gradT*shape[1], shape[1])
-    T += step*dTdt
-
-    for i in range(steps):
-        step += 1
-        g = utils._g(phi)
-        h = utils._h(phi)
-        m = 1-h;
-        M_q = 1e-6 + (M_qmax-1e-6)*m
-    
-        lq1 = utils.grad2(q1, dx, dim)
-        lq4 = utils.grad2(q4, dx, dim)
-    
-        #this term is to evolve just the orientation, as done before the first real time step in the Dorr paper
-        only_orientation = False
-    
-        if(only_orientation):
-            deltac = 0
-            deltaphi = 0
-            t1 = eqbar*eqbar*lq1
-            t4 = eqbar*eqbar*lq4
-            lmbda = (q1*t1+q4*t4)
-            deltaq1 = M_q*(t1-q1*lmbda)
-            deltaq4 = M_q*(t4-q4*lmbda)
-        
-        else:
-            #additional interpolating functions
-            p = phi*phi
-            hprime = utils._hprime(phi)
-            gprime = utils._gprime(phi)
-    
-            #bulk energy terms, using ideal solution model from Warren1995
-            H_A = W_A*gprime*T - 30*L_A*(1-T/T_mA)*g
-            H_B = W_B*gprime*T - 30*L_B*(1-T/T_mB)*g
-    
-            #quaternion gradient terms
-            gq1l = utils.grad_l(q1, dx, dim)
-            gq4l = utils.grad_l(q4, dx, dim)
-            gqsl = []
-            for j in range(dim):
-                gqsl.append(gq1l[j]*gq1l[j]+gq4l[j]*gq4l[j])
-    
-            gq1r = utils.grad_r(q1, dx, dim)
-            gq4r = utils.grad_r(q4, dx, dim)
-    
-            gqsr = []
-            for j in range(dim):
-                gqsr.append(np.roll(gqsl[j], -1, j))
-    
-            gqs = (gqsl[0]+gqsr[0])/2
-            for j in range(1, dim):
-                gqs += (gqsl[j]+gqsr[j])/2
-            rgqs_0 = np.sqrt(gqs)
-    
-            gphi = utils.grad_l(phi, dx, 2)
-            vertex_averaged_gphi = []
-            vertex_averaged_gphi.append((gphi[0]+np.roll(gphi[0], 1, 1))/2.)
-            vertex_averaged_gphi.append((gphi[1]+np.roll(gphi[1], 1, 0))/2.)
-            vertex_averaged_q1 = (q1 + np.roll(q1, 1, 0))/2.
-            vertex_averaged_q1 = (vertex_averaged_q1 + np.roll(vertex_averaged_q1, 1, 1))/2.
-            vertex_averaged_q4 = (q4 + np.roll(q4, 1, 0))/2.
-            vertex_averaged_q4 = (vertex_averaged_q4 + np.roll(vertex_averaged_q4, 1, 1))/2.
-            vertex_averaged_T = (T + np.roll(T, 1, 0))/2.
-            vertex_averaged_T = (vertex_averaged_T + np.roll(vertex_averaged_T, 1, 1))/2.
-        
-            a2_b2 = vertex_averaged_q1*vertex_averaged_q1-vertex_averaged_q4*vertex_averaged_q4
-            ab2 = 2.*vertex_averaged_q1*vertex_averaged_q4
-        
-            vertex_centered_gpsi = []
-            vertex_centered_gpsi.append(a2_b2*vertex_averaged_gphi[0] - ab2*vertex_averaged_gphi[1])
-            vertex_centered_gpsi.append(a2_b2*vertex_averaged_gphi[1] + ab2*vertex_averaged_gphi[0])
-        
-            psi_xxy = vertex_centered_gpsi[0]*vertex_centered_gpsi[0]*vertex_centered_gpsi[1]
-            psi_xyy = vertex_centered_gpsi[0]*vertex_centered_gpsi[1]*vertex_centered_gpsi[1]
-            psi_xxyy = psi_xxy*vertex_centered_gpsi[1]
-        
-            vertex_centered_mgphi2 = vertex_averaged_gphi[0]*vertex_averaged_gphi[0] + vertex_averaged_gphi[1]*vertex_averaged_gphi[1]
-    
-            #"clip" the grid: if values are smaller than "smallest", set them equal to "smallest"
-            #also clip the mgphi values to avoid divide by zero errors!
-            smallest = 1.5
-            for j in range(dim):
-                gqsl[j] = np.clip(gqsl[j], smallest, np.inf)
-                gqsr[j] = np.clip(gqsr[j], smallest, np.inf)
-            
-            vertex_centered_mgphi2 = np.clip(vertex_centered_mgphi2, 0.000000001, np.inf)
-              
-            rgqsl = []
-            rgqsr = []
-            for j in range(dim):
-                rgqsl.append(np.sqrt(gqsl[j]))
-                rgqsr.append(np.sqrt(gqsr[j]))
-                
-            #compute values from tdb
-            G_L, dGLdc = utils.compute_tdb_energy(T, c, "LIQUID")
-            G_S, dGSdc = utils.compute_tdb_energy(T, c, "FCC_A1")
-        
-            #change in c
-            M_C = v_m*c*(1-c)*(D_S+m*(D_L-D_S))/R/1574.
-            temp = (dGSdc + m*(dGLdc-dGSdc))/v_m + (W_B-W_A)*g*T
-            deltac = utils.divagradb(M_C, temp, dx, dim)
-        
-            #change in phi
-            divTgradphi = utils.divagradb(T, phi, dx, dim)
-            M_phi = (1-c)*M_A + c*M_B
-        
-            psix3 = vertex_centered_gpsi[0]*vertex_centered_gpsi[0]*vertex_centered_gpsi[0]
-            psiy3 = vertex_centered_gpsi[1]*vertex_centered_gpsi[1]*vertex_centered_gpsi[1]
-            pf_comp_x = 8*y_e*T*((2*a2_b2*psix3 + 2*ab2*psiy3)/vertex_centered_mgphi2 - vertex_averaged_gphi[0]*(psix3*vertex_centered_gpsi[0] + psiy3*vertex_centered_gpsi[1])/(vertex_centered_mgphi2*vertex_centered_mgphi2))
-            pf_comp_x = (np.roll(pf_comp_x, -1, 0) - pf_comp_x)/dx
-            pf_comp_x = (np.roll(pf_comp_x, -1, 1) + pf_comp_x)/2.
-            pf_comp_y = 8*y_e*T*((2*a2_b2*psiy3 - 2*ab2*psix3)/vertex_centered_mgphi2 - vertex_averaged_gphi[1]*(psix3*vertex_centered_gpsi[0] + psiy3*vertex_centered_gpsi[1])/(vertex_centered_mgphi2*vertex_centered_mgphi2))
-            pf_comp_y = (np.roll(pf_comp_y, -1, 1) - pf_comp_y)/dx
-            pf_comp_y = (np.roll(pf_comp_y, -1, 0) + pf_comp_y)/2.
-            deltaphi = M_phi*(ebar*ebar*((1-3*y_e)*divTgradphi + pf_comp_x + pf_comp_y)-30*g*(G_S-G_L)/v_m-W_A*gprime*T*(1-c)-W_B*gprime*T*c-4*H*T*phi*rgqs_0*1574.)
-            randArray = 2*np.random.random_sample(shape)-1
-            alpha = 0.3
-            deltaphi += M_phi*alpha*randArray*(16*g)*(30*g*(G_S-G_L)/v_m+W_A*T*gprime*(1-c)+W_B*T*gprime*c)
-        
-            #changes in q, part 1
-            dq_component = 2*H*T*p
-    
-            gaq1 = utils.gaq(gq1l, gq1r, rgqsl, rgqsr, dq_component, dx, dim)
-            gaq4 = utils.gaq(gq4l, gq4r, rgqsl, rgqsr, dq_component, dx, dim)
-        
-            q1px = vertex_averaged_q1*vertex_averaged_gphi[0]
-            q1py = vertex_averaged_q1*vertex_averaged_gphi[1]
-            q4px = vertex_averaged_q4*vertex_averaged_gphi[0]
-            q4py = vertex_averaged_q4*vertex_averaged_gphi[1]
-        
-            t1_temp = (16*ebar*ebar*T*y_e/vertex_centered_mgphi2)*(psi_xyy*(q1px - q4py) + psi_xxy*(q1py + q4px))
-            t4_temp = (16*ebar*ebar*T*y_e/vertex_centered_mgphi2)*(psi_xyy*(-q4px - q1py) + psi_xxy*(-q4py + q1px))
-            cc_t1_temp = (t1_temp + np.roll(t1_temp, -1, 0))/2.
-            cc_t1_temp = (cc_t1_temp + np.roll(cc_t1_temp, -1, 1))/2.
-            cc_t4_temp = (t4_temp + np.roll(t4_temp, -1, 0))/2.
-            cc_t4_temp = (cc_t4_temp + np.roll(cc_t4_temp, -1, 1))/2.
-        
-            t1 = eqbar*eqbar*lq1+(gaq1)*1574. + cc_t1_temp
-            t4 = eqbar*eqbar*lq4+(gaq4)*1574. + cc_t4_temp
-            lmbda = (q1*t1+q4*t4)
-            deltaq1 = M_q*(t1-q1*lmbda)
-            deltaq4 = M_q*(t4-q4*lmbda)
-    
-        #changes in q
-    
-    
-    
-        #apply changes
-        c += deltac*dt
-        phi += deltaphi*dt
-        q1 += deltaq1*dt
-        q4 += deltaq4*dt
-        utils.applyBCs(c, phi, q1, q4, nbc)
-        T += dTdt
-        if(i%10 == 0):
-            q1, q4 = utils.renormalize(q1, q4)
-        
-        #This code segment prints the progress after every 5% of the simulation is done (for convenience)
-        if(steps > 19):
-            if(i%(steps/20) == 0):
-                print(str(5*i/(steps/20))+"% done...")
-    
-        #This code segment saves the arrays every 1000 steps
-        if(step%500 == 0):
-            utils.saveArrays(data_path, step, phi, c, q1, q4)
-
-    print("Done")
-    
 def simulate_nc(data_path, initialStep, steps, initT, gradT, dTdt):
     global phi, c, q1, q4, T
     if not os.path.isfile(utils.root_folder+"/data/"+data_path+"/info.txt"):
@@ -304,162 +115,149 @@ def simulate_nc(data_path, initialStep, steps, initT, gradT, dTdt):
         lq1 = utils.grad2(q1, dx, dim)
         lq4 = utils.grad2(q4, dx, dim)
     
-        #this term is to evolve just the orientation, as done before the first real time step in the Dorr paper
-        only_orientation = False
+        #additional interpolating functions
+        p = phi*phi
+        hprime = utils._hprime(phi)
+        gprime = utils._gprime(phi)
     
-        if(only_orientation):
-            deltac = 0
-            deltaphi = 0
-            t1 = eqbar*eqbar*lq1
-            t4 = eqbar*eqbar*lq4
-            lmbda = (q1*t1+q4*t4)
-            deltaq1 = M_q*(t1-q1*lmbda)
-            deltaq4 = M_q*(t4-q4*lmbda)
+        #quaternion gradient terms
+        gq1l = utils.grad_l(q1, dx, dim)
+        gq4l = utils.grad_l(q4, dx, dim)
+        gqsl = []
+        for j in range(dim):
+            gqsl.append(gq1l[j]*gq1l[j]+gq4l[j]*gq4l[j])
+    
+        gq1r = utils.grad_r(q1, dx, dim)
+        gq4r = utils.grad_r(q4, dx, dim)
+    
+        gqsr = []
+        for j in range(dim):
+            gqsr.append(np.roll(gqsl[j], -1, j))
+    
+        gqs = (gqsl[0]+gqsr[0])/2
+        for j in range(1, dim):
+            gqs += (gqsl[j]+gqsr[j])/2
+        rgqs_0 = np.sqrt(gqs)
+    
+        gphi = utils.grad_l(phi, dx, 2)
+        vertex_averaged_gphi = []
+        vertex_averaged_gphi.append((gphi[0]+np.roll(gphi[0], 1, 1))/2.)
+        vertex_averaged_gphi.append((gphi[1]+np.roll(gphi[1], 1, 0))/2.)
+        vertex_averaged_q1 = (q1 + np.roll(q1, 1, 0))/2.
+        vertex_averaged_q1 = (vertex_averaged_q1 + np.roll(vertex_averaged_q1, 1, 1))/2.
+        vertex_averaged_q4 = (q4 + np.roll(q4, 1, 0))/2.
+        vertex_averaged_q4 = (vertex_averaged_q4 + np.roll(vertex_averaged_q4, 1, 1))/2.
+        vertex_averaged_T = (T + np.roll(T, 1, 0))/2.
+        vertex_averaged_T = (vertex_averaged_T + np.roll(vertex_averaged_T, 1, 1))/2.
         
-        else:
-            #additional interpolating functions
-            p = phi*phi
-            hprime = utils._hprime(phi)
-            gprime = utils._gprime(phi)
-    
-            #quaternion gradient terms
-            gq1l = utils.grad_l(q1, dx, dim)
-            gq4l = utils.grad_l(q4, dx, dim)
-            gqsl = []
-            for j in range(dim):
-                gqsl.append(gq1l[j]*gq1l[j]+gq4l[j]*gq4l[j])
-    
-            gq1r = utils.grad_r(q1, dx, dim)
-            gq4r = utils.grad_r(q4, dx, dim)
-    
-            gqsr = []
-            for j in range(dim):
-                gqsr.append(np.roll(gqsl[j], -1, j))
-    
-            gqs = (gqsl[0]+gqsr[0])/2
-            for j in range(1, dim):
-                gqs += (gqsl[j]+gqsr[j])/2
-            rgqs_0 = np.sqrt(gqs)
-    
-            gphi = utils.grad_l(phi, dx, 2)
-            vertex_averaged_gphi = []
-            vertex_averaged_gphi.append((gphi[0]+np.roll(gphi[0], 1, 1))/2.)
-            vertex_averaged_gphi.append((gphi[1]+np.roll(gphi[1], 1, 0))/2.)
-            vertex_averaged_q1 = (q1 + np.roll(q1, 1, 0))/2.
-            vertex_averaged_q1 = (vertex_averaged_q1 + np.roll(vertex_averaged_q1, 1, 1))/2.
-            vertex_averaged_q4 = (q4 + np.roll(q4, 1, 0))/2.
-            vertex_averaged_q4 = (vertex_averaged_q4 + np.roll(vertex_averaged_q4, 1, 1))/2.
-            vertex_averaged_T = (T + np.roll(T, 1, 0))/2.
-            vertex_averaged_T = (vertex_averaged_T + np.roll(vertex_averaged_T, 1, 1))/2.
+        a2_b2 = vertex_averaged_q1*vertex_averaged_q1-vertex_averaged_q4*vertex_averaged_q4
+        ab2 = 2.*vertex_averaged_q1*vertex_averaged_q4
         
-            a2_b2 = vertex_averaged_q1*vertex_averaged_q1-vertex_averaged_q4*vertex_averaged_q4
-            ab2 = 2.*vertex_averaged_q1*vertex_averaged_q4
+        vertex_centered_gpsi = []
+        vertex_centered_gpsi.append(a2_b2*vertex_averaged_gphi[0] - ab2*vertex_averaged_gphi[1])
+        vertex_centered_gpsi.append(a2_b2*vertex_averaged_gphi[1] + ab2*vertex_averaged_gphi[0])
         
-            vertex_centered_gpsi = []
-            vertex_centered_gpsi.append(a2_b2*vertex_averaged_gphi[0] - ab2*vertex_averaged_gphi[1])
-            vertex_centered_gpsi.append(a2_b2*vertex_averaged_gphi[1] + ab2*vertex_averaged_gphi[0])
+        psi_xxy = vertex_centered_gpsi[0]*vertex_centered_gpsi[0]*vertex_centered_gpsi[1]
+        psi_xyy = vertex_centered_gpsi[0]*vertex_centered_gpsi[1]*vertex_centered_gpsi[1]
+        psi_xxyy = psi_xxy*vertex_centered_gpsi[1]
         
-            psi_xxy = vertex_centered_gpsi[0]*vertex_centered_gpsi[0]*vertex_centered_gpsi[1]
-            psi_xyy = vertex_centered_gpsi[0]*vertex_centered_gpsi[1]*vertex_centered_gpsi[1]
-            psi_xxyy = psi_xxy*vertex_centered_gpsi[1]
-        
-            vertex_centered_mgphi2 = vertex_averaged_gphi[0]*vertex_averaged_gphi[0] + vertex_averaged_gphi[1]*vertex_averaged_gphi[1]
+        vertex_centered_mgphi2 = vertex_averaged_gphi[0]*vertex_averaged_gphi[0] + vertex_averaged_gphi[1]*vertex_averaged_gphi[1]
     
-            #"clip" the grid: if values are smaller than "smallest", set them equal to "smallest"
-            #also clip the mgphi values to avoid divide by zero errors!
-            smallest = 1.5
-            for j in range(dim):
-                gqsl[j] = np.clip(gqsl[j], smallest, np.inf)
-                gqsr[j] = np.clip(gqsr[j], smallest, np.inf)
+        #"clip" the grid: if values are smaller than "smallest", set them equal to "smallest"
+        #also clip the mgphi values to avoid divide by zero errors!
+        smallest = 1.5
+        for j in range(dim):
+            gqsl[j] = np.clip(gqsl[j], smallest, np.inf)
+            gqsr[j] = np.clip(gqsr[j], smallest, np.inf)
             
-            vertex_centered_mgphi2 = np.clip(vertex_centered_mgphi2, 0.000000001, np.inf)
+        vertex_centered_mgphi2 = np.clip(vertex_centered_mgphi2, 0.000000001, np.inf)
               
-            rgqsl = []
-            rgqsr = []
-            for j in range(dim):
-                rgqsl.append(np.sqrt(gqsl[j]))
-                rgqsr.append(np.sqrt(gqsr[j]))
+        rgqsl = []
+        rgqsr = []
+        for j in range(dim):
+            rgqsl.append(np.sqrt(gqsl[j]))
+            rgqsr.append(np.sqrt(gqsr[j]))
                 
-            #compute values from tdb
-            G_L, dGLdc = utils.compute_tdb_energy_nc(T, c, "LIQUID")
-            G_S, dGSdc = utils.compute_tdb_energy_nc(T, c, "FCC_A1")
+        #compute values from tdb
+        G_L, dGLdc = utils.compute_tdb_energy_nc(T, c, "LIQUID")
+        G_S, dGSdc = utils.compute_tdb_energy_nc(T, c, "FCC_A1")
         
-            #change in c1, c2
-            M_c = []
-            dFdc = []
-            deltac = []
-            #find the standard deviation as an array 
-            std_c=np.sqrt(np.absolute(2*R*T/v_m))
-            for j in range(len(c)):
-                #find the actual random noise
-                noise_c=np.random.normal(0, std_c, phi.shape)
-                M_c.append(v_m*c[j]*(D_S+m*(D_L-D_S))/R/1574.)
-                #add the change in noise inside the functional
-                dFdc.append((dGSdc[j] + m*(dGLdc[j]-dGSdc[j]))/v_m + (W[j]-W[len(c)])*g*T+noise_c)
-            for j in range(len(c)):
-                deltac.append(utils.divagradb(M_c[j]*(1-c[j]), dFdc[j], dx, dim))
-                for k in range(len(c)):
-                    if not (j == k):
-                        deltac[j] -= utils.divagradb(M_c[j]*c[k], dFdc[k], dx, dim)
+        #change in c1, c2
+        M_c = []
+        dFdc = []
+        deltac = []
+        #find the standard deviation as an array 
+        std_c=np.sqrt(np.absolute(2*R*T/v_m))
+        for j in range(len(c)):
+            #find the actual random noise
+            noise_c=np.random.normal(0, std_c, phi.shape)
+            M_c.append(v_m*c[j]*(D_S+m*(D_L-D_S))/R/1574.)
+            #add the change in noise inside the functional
+            dFdc.append((dGSdc[j] + m*(dGLdc[j]-dGSdc[j]))/v_m + (W[j]-W[len(c)])*g*T+noise_c)
+        for j in range(len(c)):
+            deltac.append(utils.divagradb(M_c[j]*(1-c[j]), dFdc[j], dx, dim))
+            for k in range(len(c)):
+                if not (j == k):
+                    deltac[j] -= utils.divagradb(M_c[j]*c[k], dFdc[k], dx, dim)
         
-            #change in phi
-            divTgradphi = utils.divagradb(T, phi, dx, dim)
+        #change in phi
+        divTgradphi = utils.divagradb(T, phi, dx, dim)
             
-            #compute overall order mobility, from order mobility coefficients
-            c_N = 1-np.sum(c, axis=0)
-            M_phi = c_N*M[len(c)]
-            for j in range(len(c)):
-                M_phi += c[j]*M[j]
+        #compute overall order mobility, from order mobility coefficients
+        c_N = 1-np.sum(c, axis=0)
+        M_phi = c_N*M[len(c)]
+        for j in range(len(c)):
+            M_phi += c[j]*M[j]
                 
-            #compute well size term for N-components
-            well = c_N*W[len(c)]
-            for j in range(len(c)):
-                well += c[j]*W[j]
-            well *= (T*gprime)
+        #compute well size term for N-components
+        well = c_N*W[len(c)]
+        for j in range(len(c)):
+            well += c[j]*W[j]
+        well *= (T*gprime)
             
-            psix3 = vertex_centered_gpsi[0]*vertex_centered_gpsi[0]*vertex_centered_gpsi[0]
-            psiy3 = vertex_centered_gpsi[1]*vertex_centered_gpsi[1]*vertex_centered_gpsi[1]
-            pf_comp_x = 8*y_e*T*((2*a2_b2*psix3 + 2*ab2*psiy3)/vertex_centered_mgphi2 - vertex_averaged_gphi[0]*(psix3*vertex_centered_gpsi[0] + psiy3*vertex_centered_gpsi[1])/(vertex_centered_mgphi2*vertex_centered_mgphi2))
-            pf_comp_x = (np.roll(pf_comp_x, -1, 0) - pf_comp_x)/dx
-            pf_comp_x = (np.roll(pf_comp_x, -1, 1) + pf_comp_x)/2.
-            pf_comp_y = 8*y_e*T*((2*a2_b2*psiy3 - 2*ab2*psix3)/vertex_centered_mgphi2 - vertex_averaged_gphi[1]*(psix3*vertex_centered_gpsi[0] + psiy3*vertex_centered_gpsi[1])/(vertex_centered_mgphi2*vertex_centered_mgphi2))
-            pf_comp_y = (np.roll(pf_comp_y, -1, 1) - pf_comp_y)/dx
-            pf_comp_y = (np.roll(pf_comp_y, -1, 0) + pf_comp_y)/2.
-            deltaphi = M_phi*(ebar*ebar*((1-3*y_e)*divTgradphi + pf_comp_x + pf_comp_y)-30*g*(G_S-G_L)/v_m-well-4*H*T*phi*rgqs_0*1574.)
+        psix3 = vertex_centered_gpsi[0]*vertex_centered_gpsi[0]*vertex_centered_gpsi[0]
+        psiy3 = vertex_centered_gpsi[1]*vertex_centered_gpsi[1]*vertex_centered_gpsi[1]
+        pf_comp_x = 8*y_e*T*((2*a2_b2*psix3 + 2*ab2*psiy3)/vertex_centered_mgphi2 - vertex_averaged_gphi[0]*(psix3*vertex_centered_gpsi[0] + psiy3*vertex_centered_gpsi[1])/(vertex_centered_mgphi2*vertex_centered_mgphi2))
+        pf_comp_x = (np.roll(pf_comp_x, -1, 0) - pf_comp_x)/dx
+        pf_comp_x = (np.roll(pf_comp_x, -1, 1) + pf_comp_x)/2.
+        pf_comp_y = 8*y_e*T*((2*a2_b2*psiy3 - 2*ab2*psix3)/vertex_centered_mgphi2 - vertex_averaged_gphi[1]*(psix3*vertex_centered_gpsi[0] + psiy3*vertex_centered_gpsi[1])/(vertex_centered_mgphi2*vertex_centered_mgphi2))
+        pf_comp_y = (np.roll(pf_comp_y, -1, 1) - pf_comp_y)/dx
+        pf_comp_y = (np.roll(pf_comp_y, -1, 0) + pf_comp_y)/2.
+        deltaphi = M_phi*(ebar*ebar*((1-3*y_e)*divTgradphi + pf_comp_x + pf_comp_y)-30*g*(G_S-G_L)/v_m-well-4*H*T*phi*rgqs_0*1574.)
             
-            #old noise from Warren1995:
-            #randArray = 2*np.random.random_sample(shape)-1
-            #alpha = 0.3
-            #deltaphi += M_phi*alpha*randArray*(16*g)*(30*g*(G_S-G_L)/v_m+well)
+        #old noise from Warren1995:
+        #randArray = 2*np.random.random_sample(shape)-1
+        #alpha = 0.3
+        #deltaphi += M_phi*alpha*randArray*(16*g)*(30*g*(G_S-G_L)/v_m+well)
             
-            #noise in phi, based on Langevin Noise
-            std_phi=np.sqrt(np.absolute(2*R*M_phi*T/v_m))
-            noise_phi=np.random.normal(0, std_phi, phi.shape)
-            deltaphi += noise_phi
+        #noise in phi, based on Langevin Noise
+        std_phi=np.sqrt(np.absolute(2*R*M_phi*T/v_m))
+        noise_phi=np.random.normal(0, std_phi, phi.shape)
+        deltaphi += noise_phi
         
-            #changes in q, part 1
-            dq_component = 2*H*T*p
+        #changes in q, part 1
+        dq_component = 2*H*T*p
     
-            gaq1 = utils.gaq(gq1l, gq1r, rgqsl, rgqsr, dq_component, dx, dim)
-            gaq4 = utils.gaq(gq4l, gq4r, rgqsl, rgqsr, dq_component, dx, dim)
+        gaq1 = utils.gaq(gq1l, gq1r, rgqsl, rgqsr, dq_component, dx, dim)
+        gaq4 = utils.gaq(gq4l, gq4r, rgqsl, rgqsr, dq_component, dx, dim)
         
-            q1px = vertex_averaged_q1*vertex_averaged_gphi[0]
-            q1py = vertex_averaged_q1*vertex_averaged_gphi[1]
-            q4px = vertex_averaged_q4*vertex_averaged_gphi[0]
-            q4py = vertex_averaged_q4*vertex_averaged_gphi[1]
+        q1px = vertex_averaged_q1*vertex_averaged_gphi[0]
+        q1py = vertex_averaged_q1*vertex_averaged_gphi[1]
+        q4px = vertex_averaged_q4*vertex_averaged_gphi[0]
+        q4py = vertex_averaged_q4*vertex_averaged_gphi[1]
         
-            t1_temp = (16*ebar*ebar*T*y_e/vertex_centered_mgphi2)*(psi_xyy*(q1px - q4py) + psi_xxy*(q1py + q4px))
-            t4_temp = (16*ebar*ebar*T*y_e/vertex_centered_mgphi2)*(psi_xyy*(-q4px - q1py) + psi_xxy*(-q4py + q1px))
-            cc_t1_temp = (t1_temp + np.roll(t1_temp, -1, 0))/2.
-            cc_t1_temp = (cc_t1_temp + np.roll(cc_t1_temp, -1, 1))/2.
-            cc_t4_temp = (t4_temp + np.roll(t4_temp, -1, 0))/2.
-            cc_t4_temp = (cc_t4_temp + np.roll(cc_t4_temp, -1, 1))/2.
+        t1_temp = (16*ebar*ebar*T*y_e/vertex_centered_mgphi2)*(psi_xyy*(q1px - q4py) + psi_xxy*(q1py + q4px))
+        t4_temp = (16*ebar*ebar*T*y_e/vertex_centered_mgphi2)*(psi_xyy*(-q4px - q1py) + psi_xxy*(-q4py + q1px))
+        cc_t1_temp = (t1_temp + np.roll(t1_temp, -1, 0))/2.
+        cc_t1_temp = (cc_t1_temp + np.roll(cc_t1_temp, -1, 1))/2.
+        cc_t4_temp = (t4_temp + np.roll(t4_temp, -1, 0))/2.
+        cc_t4_temp = (cc_t4_temp + np.roll(cc_t4_temp, -1, 1))/2.
         
-            t1 = eqbar*eqbar*lq1+(gaq1)*1574. + cc_t1_temp
-            t4 = eqbar*eqbar*lq4+(gaq4)*1574. + cc_t4_temp
-            lmbda = (q1*t1+q4*t4)
-            deltaq1 = M_q*(t1-q1*lmbda)
-            deltaq4 = M_q*(t4-q4*lmbda)
+        t1 = eqbar*eqbar*lq1+(gaq1)*1574. + cc_t1_temp
+        t4 = eqbar*eqbar*lq4+(gaq4)*1574. + cc_t4_temp
+        lmbda = (q1*t1+q4*t4)
+        deltaq1 = M_q*(t1-q1*lmbda)
+        deltaq4 = M_q*(t4-q4*lmbda)
     
         #changes in q
     
