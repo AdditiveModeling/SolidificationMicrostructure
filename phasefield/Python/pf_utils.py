@@ -97,27 +97,44 @@ def load_tdb(tdb_path):
     components.sort()
     return True
 
-def __h(phi):
+def __h(phi_i):
     #h function from Dorr2010
-    return phi*phi*phi*(10-15*phi+6*phi*phi)
+    #important, input is a single field of the phi array
+    phi2 = phi_i**2
+    return (phi2*phi_i)*(10-15*phi_i+6*phi2)
 
-def __hprime(phi):
+def __hprime(phi_i):
     #derivative of the h function from Dorr2010, w.r.t phi
-    return (30*phi*phi*(1-phi)*(1-phi))
+    #important, input is a single field of the phi array
+    phi_phi2 = phi_i-(phi_i**2)
+    return (30*(phi_phi2**2))
 
 def __g(phi):
-    #g function from Warren1995. Similar to that used in Dorr2010 and Granasy2014
-    return (phi*phi*(1-phi)*(1-phi))
+    #g function from Toth2015, for multiorder simulations
+    #important: input is an array of phase fields, not a single field!
+    sum = 1/12.
+    for i in range(len(phi)):
+        phi2 = phi[i]**2
+        sum += phi2*phi2/4. - phi2*phi[i]/3.
+        for j in range(i+1, len(phi)):
+            sum += phi2*phi[j]**2
+    return sum
 
-def __gprime(phi):
-    #derivative of g function, w.r.t phi
-    return (4*phi*phi*phi - 6*phi*phi +2*phi)
+def __gprime(phi, index):
+    #derivative of g function, w.r.t phi_index
+    sum = 0;
+    for i in range(len(phi)):
+        sum += phi[i]**2
+    phi2 = phi[index]**2
+    sum -= phi2
+    return phi2*phi[index] - phi2 + phi[index]*sum
 
 #Numpy vectorized versions of above functions
 _h = np.vectorize(__h)
 _hprime = np.vectorize(__hprime)
 _g = np.vectorize(__g) 
 _gprime = np.vectorize(__gprime)
+    
 
 def grad(phi, dx, dim):
     r = []
@@ -169,6 +186,186 @@ def gaq(gql, gqr, rgqsl, rgqsr, dqc, dx, dim):
     for i in range(dim):
         r += ((0.5*(dqc+np.roll(dqc, -1, i))*gqr[i]/rgqsr[i])-(0.5*(dqc+np.roll(dqc, 1, i))*gql[i]/rgqsl[i]))/(dx)
     return r
+
+def va_br(field, dim):
+    #vertex averaged value of field, at the bottom-right vertex
+    f = field+np.roll(field, -1, 0)
+    for i in range(1,dim):
+        f = f+np.roll(f,-1,i)
+    return f
+
+def va_ul(field, dim):
+    #vertex averaged value of field, at the upper-left vertex
+    f = field+np.roll(field, 1, 0)
+    for i in range(1,dim):
+        f = f+np.roll(f,1,i)
+    return f
+
+def vg_ul(field, dim, direction, dx):
+    f = field
+    for i in range(dim):
+        if(i != direction):
+            f = f + np.roll(f, 1, i)
+    f = (f-np.roll(f, 1, direction))/dx
+    return f
+
+def doublesums(phi, q1, q4, ebar2, _w, gamma, dx):
+    #utility function which computes the double summations present in the rate equations
+    #outputs values which are close to the final calculations:
+    #         e2, w, de2dpj, de2dpxj, de2dpyj, dwdpj, de2dq1, de2dq4
+    #e2: Vertex-centered value for e2, used in div dot dI/d-grad-phi_j computations
+    #w: cell-centered value for w, used in dI/dphi_j
+    #de2dpj: cell centered value of de2/dphi_j, used in dI/dphi_j
+    #de2dpxj/de2dpyj: vertex-centered values for de2/dphi_{x/y, j}
+    #dwdpj: cell centered value of dw/dphi_j, used in dI/dphi_j
+    #de2dq1/de2dq4: vertex averaged, cell centered value for de2/dq_{1,4}
+    
+    
+    dim = 2 #HARD CODED, MUST BE CHANGED FOR 3D!
+    
+    zeros = np.zeros(q1.shape)
+    phi2 = [] #vector of phi_i^2 values
+    vaphi = [] #vector of vertex averaged phi_i values
+    vaphi2 = [] #vector of vertex averaged phi_i^2 values
+    vaphi4 = [] #vector of vertex averaged phi_i^4 values
+    phi3 = [] #vector of phi_i^3 values
+    phi4 = [] #vector of phi_i^4 values
+    eta_ij = [] #matrix of eta values
+    psix_ij = [] #matrix of psi_x,ij values, br_vertex
+    psiy_ij = [] #matrix of psi_y,ij values, br_vertex
+    phix = [] #vector of phi_x values, r_face
+    phiy = [] #vector of phi_y values, b_face
+    phix_ij = [] #matrix of phix_i - phix_j values, br_vertex
+    phiy_ij = [] #matrix of phiy_i - phiy_j values, br_vertex
+    #vertex averaged quaternion values, for psi computations
+    va_q1 = va_br(q1, dim)
+    va_q4 = va_br(q4, dim)
+    q2q2 = va_q1**2 - va_q4**2
+    qq2 = 2*va_q1*va_q4
+    for i in range(len(phi)):
+        vaphi.append(va_br(phi[i], dim))
+        vaphi2.append(vaphi[i]**2)
+        vaphi4.append(vaphi2[i]**2)
+        phi2.append(phi[i]**2)
+        phi4.append(phi2[i]**2)
+        phi3.append(phi2[i]*phi[i])
+        gphi = grad_r(phi[i], dx, dim)
+        phix.append(gphi[0])
+        phiy.append(gphi[1])
+        
+        #add new row to matrices
+        phix_ij.append([])
+        phiy_ij.append([])
+        psix_ij.append([])
+        psiy_ij.append([])
+        eta_ij.append([])
+        
+        #fill non-diagonal members of matrices
+        for j in range(i):
+            pxij = phix[i] - phix[j]
+            pxij = 0.5*(pxij+np.roll(pxij, -1, 1))
+            phix_ij[i].append(pxij)
+            phix_ij[j].append(pxij)
+            pyij = phiy[i] - phiy[j]
+            pyij = 0.5*(pyij+np.roll(pyij, -1, 0))
+            phiy_ij[i].append(pyij)
+            phiy_ij[j].append(pyij)
+            psixij = q2q2*pxij-qq2*pyij
+            psiyij = qq2*pxij+q2q2*pyij
+            psix_ij[i].append(psixij)
+            psix_ij[j].append(psixij)
+            psiy_ij[i].append(psiyij)
+            psiy_ij[j].append(psiyij)
+            #due to divide-by-zero possibility, set equal to zero if equals nan
+            eij = np.nan_to_num(1-3*gamma[i][j]+4*gamma[i][j]*(psixij**4+psiyij**4)/((pxij**2+pyij**2)**2))
+            eta_ij[i].append(eij)
+            eta_ij[j].append(eij)
+            
+        #fill diagonal entry of matrices
+        phix_ij[i].append(zeros)
+        phiy_ij[i].append(zeros)
+        psix_ij[i].append(zeros)
+        psiy_ij[i].append(zeros)
+        eta_ij[i].append(zeros)
+        
+    
+    phi2sum = np.sum(phi2, axis=0)
+    phi4sum = np.sum(phi4, axis=0)
+    vaphi2sum = np.sum(vaphi2, axis=0)
+    vaphi4sum = np.sum(vaphi4, axis=0)
+    #magic! the sum of all pairs of phi_i^2phi_j^2 can be found using the following trick
+    ssp2p2 = 0.5*(phi2sum**2-phi4sum) #cell
+    issp2p2 = 1./ssp2p2 #convenience, since division is expensive and its used a lot
+    vassp2p2 = 0.5*(phi2sum**2-phi4sum) #VERTEX
+    ivassp2p2 = 1./vassp2p2 #convenience, since division is expensive and its used a lot
+    #other sums are not so easy...
+    #the format for these names is the abbreviation of the term
+    #for example: s2e2npp2 is sum_{k!=j}_2epsilon^2*eta*phi_j*phi_k^2
+    sswp2p2 = 0 #cell
+    sse2np2p2 = 0 #vac
+    s2e2npp2 = [] #vector, for each phi_j, vac
+    s2wpp2 = [] #vector, for each phi_j, cell
+    s2pp2 = [] #vector, for each phi_j, cell
+    de2dpxj = [] #vector of de^2/dphi_{x,j}, for each phi_j, VERTEX
+    de2dpyj = [] #vector of de^2/dphi_{y,j}, for each phi_j, VERTEX
+    de2dq1 = 0 #vac
+    de2dq4 = 0 #vac
+    for i in range(len(phi)):
+        s2e2npp2.append(0)
+        s2wpp2.append(0)
+        de2dpxj.append(0)
+        de2dpyj.append(0)
+        s2pp2.append(2*phi[i]*(phi2sum-phi2[i]))
+        for j in range(i):
+            sswp2p2 += _w[i][j]*phi2[i]*phi2[j]
+            sse2np2p2 += ebar2[i][j]*eta_ij[i][j]*vaphi2[i]*vaphi2[j]
+            s2e2npp2[i] += 2*ebar2[i][j]*eta_ij[i][j]*vaphi[i]*vaphi2[j]
+            s2e2npp2[j] += 2*ebar2[i][j]*eta_ij[i][j]*vaphi[j]*vaphi2[i]
+            s2wpp2[i] += 2*_w[i][j]*phi[i]*phi2[j]
+            s2wpp2[j] += 2*_w[i][j]*phi[j]*phi2[i]
+            gp2 = (phix_ij[i][j]**2+phiy_ij[i][j]**2)
+            gp4 = gp2**2
+            gp8 = gp4**2
+            psix3 = psix_ij[i][j]**3
+            psiy3 = psiy_ij[i][j]**3
+            gp2psi4 = gp2*(psix3*psix_ij[i][j]+psiy3*psiy_ij[i][j])
+            dedpx = np.nan_to_num(16*gamma[i][j]*ebar2[i][j]*vaphi2[i]*vaphi2[j]*((gp4*(psix3*q2q2+psiy3*qq2)-gp2psi4*phix_ij[i][j])/gp8))
+            dedpy = np.nan_to_num(16*gamma[i][j]*ebar2[i][j]*vaphi2[i]*vaphi2[j]*((gp4*(psiy3*q2q2-psix3*qq2)-gp2psi4*phiy_ij[i][j])/gp8))
+            de2dpxj[i] += dedpx
+            de2dpxj[j] += dedpx
+            de2dpyj[i] += dedpy
+            de2dpyj[j] += dedpy
+            dpsixdq1 = 2*va_q1*phix_ij[i][j]-2*va_q4*phiy_ij[i][j]
+            dpsiydq1 = 2*va_q1*phiy_ij[i][j]+2*va_q4*phix_ij[i][j]
+            de2dq1 += np.nan_to_num(16*gamma[i][j]*ebar2[i][j]*vaphi2[i]*vaphi2[j]*(psix3*dpsixdq1+psiy3*dpsiydq1)/gp4)
+            dpsixdq4 = -2*va_q4*phix_ij[i][j]-2*va_q1*phiy_ij[i][j]
+            dpsiydq4 = -2*va_q4*phiy_ij[i][j]+2*va_q1*phix_ij[i][j]
+            de2dq4 += np.nan_to_num(16*gamma[i][j]*ebar2[i][j]*vaphi2[i]*vaphi2[j]*(psix3*dpsixdq4+psiy3*dpsiydq4)/gp4)
+    
+    #convert nan values to zero, essentially eliminates this term if only 1 non-zero phase is present
+    de2dq1 = np.nan_to_num(de2dq1*ivassp2p2)
+    de2dq4 = np.nan_to_num(de2dq4*ivassp2p2)
+    dwdpj = [] #one for each phi_j, cell
+    de2dpj = [] #one for each phi_j, vac
+    
+    #compute e2 before vertex averaging, since we need its vertex value
+    e2 = sse2np2p2*ivassp2p2
+    
+    #vertex average arrays need to be averaged to find value on the cell
+    sse2np2p2 = va_ul(sse2np2p2, dim)
+    de2dq1 = va_ul(de2dq1, dim)
+    de2dq4 = va_ul(de2dq4, dim)
+    for i in range(len(phi)):
+        de2dpxj[i] = np.nan_to_num(de2dpxj[i]*ivassp2p2)
+        de2dpyj[i] = np.nan_to_num(de2dpyj[i]*ivassp2p2)
+        s2e2npp2[i] = va_ul(s2e2npp2[i], dim)
+        dwdpj.append((s2wpp2[i]*ssp2p2-sswp2p2*s2pp2[i])*issp2p2*issp2p2)
+        de2dpj.append((s2e2npp2[i]*ssp2p2-sse2np2p2*s2pp2[i])*issp2p2*issp2p2)
+        
+    w = sswp2p2*issp2p2
+        
+    return e2, w, de2dpj, de2dpxj, de2dpyj, dwdpj, de2dq1, de2dq4
+        
 
 def renormalize(q1, q4):
     q = np.sqrt(q1*q1+q4*q4)

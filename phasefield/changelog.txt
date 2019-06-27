@@ -1,3 +1,8 @@
+1.1.2:
+Finished first pass at coding up engine for multicomponent, multiorder model
+Offloaded several intensive calculations to the function doublesums in pf_utils, to begin abstracting and cleaning up pf_engine fully
+Warning: this version is currently non-functional due to rewriting the format for pf_engine.py!
+
 1.1.1:
 Finished derivation of multiorder rate equations
 Cleaned up code base - removed all non-multicomponent functions from pf_engine and pf_utils
