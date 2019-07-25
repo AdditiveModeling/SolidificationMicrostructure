@@ -1,0 +1,37 @@
+$-----------------------------------------------------------------------------------------------------------------------
+$ 2009 05 07
+$ From: An X. et al., "Phase equilibria of the La–Ni–Cu ternary system at 673 K: Thermodynamic modeling and experimental validation"
+$-----------------------------------------------------------------------------------------------------------------------
+
+ELEMENT CU	FCC_A1                       63.546           5004          33.15 !
+Element NI  FCC_A1                       58.693           4787          29.796 !
+ELEMENT VA	Vacancy                           0              0              0 !
+
+
+FUNCTION G_CU_FCC  298.15  -7770.46+130.485*T-24.1124*T*LN(T)-0.00265684*T**2+52478*T**(-1)+1.29223e-007*T**3; 1357.77 Y
+	-13542+183.804*T-31.38*T*LN(T)+3.642e+029*T**(-9); 3200 N !
+
+FUNCTION G_CU_LIQUID  298.15  5194.28+120.973*T-24.1124*T*LN(T)-0.00265684*T**2+52478*T**(-1)+1.29223e-007*T**3-5.849e-021*T**7; 1357.77 Y
+	-46.545+173.881*T-31.38*T*LN(T); 3200 N !
+
+FUNCTION G_NI_LIQUID  298.15  11235.527+108.457*T-22.096*T*LN(T)-0.0048407*T**2-0.382318e-020*T**7; 1728 Y
+	-9549.775+268.598*T-43.100*T*LN(T); 3000 N !
+
+FUNCTION G_NI_FCC  298.15  -5179.159+117.854*T-22.096*T*LN(T)-0.0048407*T**2; 1728 Y
+	-27840.655+279.135*T-43.100*T*LN(T)+1127.54e+028*T**(-9); 3000 N !
+
+Phase FCC_A1 % 1 1 !
+Constituent FCC_A1 : CU, NI : !
+Parameter G(FCC_A1, CU; 0) 298.15  G_CU_FCC; 6000 N !
+Parameter G(FCC_A1, NI; 0) 298.15  G_NI_FCC; 6000 N !
+Parameter G(FCC_A1, CU, NI; 0)  298.15  8047.72+3.42217*T+935.5-0.732*T; 6000 N !
+Parameter G(FCC_A1, CU, NI; 1)  298.15  -2041.30+0.99714*T+594.90-0.317*T; 6000 N !
+
+Phase Liquid % 1 1 !
+Constituent Liquid : CU, NI : !
+Parameter G(Liquid, CU; 0) 298.15  G_CU_LIQUID; 6000 N !
+Parameter G(Liquid, NI; 0) 298.15  G_NI_LIQUID; 6000 N !
+Parameter G(Liquid, CU, NI; 0)  298.15  12048.61+1.29093*T; 6000 N !
+Parameter G(Liquid, CU, NI; 1)  298.15  -1861.61+0.94201*T; 6000 N !
+
+
