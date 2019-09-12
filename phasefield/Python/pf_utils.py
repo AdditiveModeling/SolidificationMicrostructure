@@ -90,7 +90,8 @@ def load_tdb(tdb_path):
     tdb = pyc.Database(root_folder + '/TDB/' + tdb_path)
     
     #update phases
-    # will automatically update "phases" in multiphase model. For now, phases is hardcoded
+    phases = list(tdb.phases)
+    phases.sort()
     
     #update components
     components = list(tdb.elements)
@@ -107,9 +108,13 @@ def __hprime(phi_i):
     #derivative of the h function from Dorr2010, w.r.t phi
     #important, input is a single field of the phi array
     phi_phi2 = phi_i-(phi_i**2)
-    return (30*(phi_phi2**2))
+    return 30*(phi_phi2**2)
 
-def __g(phi):
+#Numpy vectorized versions of above functions
+_h = np.vectorize(__h)
+_hprime = np.vectorize(__hprime)
+
+def _g(phi):
     #g function from Toth2015, for multiorder simulations
     #important: input is an array of phase fields, not a single field!
     sum = 1/12.
@@ -120,7 +125,7 @@ def __g(phi):
             sum += phi2*phi[j]**2
     return sum
 
-def __gprime(phi, index):
+def _gprime(phi, index):
     #derivative of g function, w.r.t phi_index
     sum = 0;
     for i in range(len(phi)):
@@ -128,12 +133,6 @@ def __gprime(phi, index):
     phi2 = phi[index]**2
     sum -= phi2
     return phi2*phi[index] - phi2 + phi[index]*sum
-
-#Numpy vectorized versions of above functions
-_h = np.vectorize(__h)
-_hprime = np.vectorize(__hprime)
-_g = np.vectorize(__g) 
-_gprime = np.vectorize(__gprime)
     
 
 def grad(phi, dx, dim):
@@ -189,16 +188,16 @@ def gaq(gql, gqr, rgqsl, rgqsr, dqc, dx, dim):
 
 def va_br(field, dim):
     #vertex averaged value of field, at the bottom-right vertex
-    f = field+np.roll(field, -1, 0)
+    f = 0.5*(field+np.roll(field, -1, 0))
     for i in range(1,dim):
-        f = f+np.roll(f,-1,i)
+        f = 0.5*(f+np.roll(f,-1,i))
     return f
 
 def va_ul(field, dim):
     #vertex averaged value of field, at the upper-left vertex
-    f = field+np.roll(field, 1, 0)
+    f = 0.5*(field+np.roll(field, 1, 0))
     for i in range(1,dim):
-        f = f+np.roll(f,1,i)
+        f = 0.5*(f+np.roll(f,1,i))
     return f
 
 def vg_ul(field, dim, direction, dx):
@@ -220,7 +219,6 @@ def doublesums(phi, q1, q4, ebar2, _w, gamma, dx):
     #dwdpj: cell centered value of dw/dphi_j, used in dI/dphi_j
     #de2dq1/de2dq4: vertex averaged, cell centered value for de2/dq_{1,4}
     
-    
     dim = 2 #HARD CODED, MUST BE CHANGED FOR 3D!
     
     zeros = np.zeros(q1.shape)
@@ -238,133 +236,140 @@ def doublesums(phi, q1, q4, ebar2, _w, gamma, dx):
     phix_ij = [] #matrix of phix_i - phix_j values, br_vertex
     phiy_ij = [] #matrix of phiy_i - phiy_j values, br_vertex
     #vertex averaged quaternion values, for psi computations
-    va_q1 = va_br(q1, dim)
-    va_q4 = va_br(q4, dim)
-    q2q2 = va_q1**2 - va_q4**2
-    qq2 = 2*va_q1*va_q4
-    for i in range(len(phi)):
-        vaphi.append(va_br(phi[i], dim))
-        vaphi2.append(vaphi[i]**2)
-        vaphi4.append(vaphi2[i]**2)
-        phi2.append(phi[i]**2)
-        phi4.append(phi2[i]**2)
-        phi3.append(phi2[i]*phi[i])
-        gphi = grad_r(phi[i], dx, dim)
-        phix.append(gphi[0])
-        phiy.append(gphi[1])
+    #with np.errstate(divide='ignore', invalid='ignore'):
+    with np.errstate(divide='warn', invalid='warn'):
+        va_q1 = va_br(q1, dim)
+        va_q4 = va_br(q4, dim)
+        q2q2 = va_q1**2 - va_q4**2
+        qq2 = 2*va_q1*va_q4
+        for i in range(len(phi)):
+            phi2.append(phi[i]**2)
+            phi4.append(phi2[i]**2)
+            phi3.append(phi2[i]*phi[i])
+            vaphi.append(va_br(phi[i], dim))
+            vaphi2.append(vaphi[i]**2)
+            vaphi4.append(vaphi[i]**4)
+            gphi = grad_r(phi[i], dx, dim)
+            phix.append(gphi[0])
+            phiy.append(gphi[1])
         
-        #add new row to matrices
-        phix_ij.append([])
-        phiy_ij.append([])
-        psix_ij.append([])
-        psiy_ij.append([])
-        eta_ij.append([])
+            #add new row to matrices
+            phix_ij.append([])
+            phiy_ij.append([])
+            psix_ij.append([])
+            psiy_ij.append([])
+            eta_ij.append([])
         
-        #fill non-diagonal members of matrices
-        for j in range(i):
-            pxij = phix[i] - phix[j]
-            pxij = 0.5*(pxij+np.roll(pxij, -1, 1))
-            phix_ij[i].append(pxij)
-            phix_ij[j].append(pxij)
-            pyij = phiy[i] - phiy[j]
-            pyij = 0.5*(pyij+np.roll(pyij, -1, 0))
-            phiy_ij[i].append(pyij)
-            phiy_ij[j].append(pyij)
-            psixij = q2q2*pxij-qq2*pyij
-            psiyij = qq2*pxij+q2q2*pyij
-            psix_ij[i].append(psixij)
-            psix_ij[j].append(psixij)
-            psiy_ij[i].append(psiyij)
-            psiy_ij[j].append(psiyij)
-            #due to divide-by-zero possibility, set equal to zero if equals nan
-            eij = np.nan_to_num(1-3*gamma[i][j]+4*gamma[i][j]*(psixij**4+psiyij**4)/((pxij**2+pyij**2)**2))
-            eta_ij[i].append(eij)
-            eta_ij[j].append(eij)
-            
-        #fill diagonal entry of matrices
-        phix_ij[i].append(zeros)
-        phiy_ij[i].append(zeros)
-        psix_ij[i].append(zeros)
-        psiy_ij[i].append(zeros)
-        eta_ij[i].append(zeros)
+            #fill non-diagonal members of matrices
+            for j in range(i):
+                pxij = phix[i] - phix[j]
+                pxij = 0.5*(pxij+np.roll(pxij, -1, 1))
+                phix_ij[i].append(pxij)
+                phix_ij[j].append(pxij)
+                pyij = phiy[i] - phiy[j]
+                pyij = 0.5*(pyij+np.roll(pyij, -1, 0))
+                phiy_ij[i].append(pyij)
+                phiy_ij[j].append(pyij)
+                psixij = q2q2*pxij-qq2*pyij
+                psiyij = qq2*pxij+q2q2*pyij
+                psix_ij[i].append(psixij)
+                psix_ij[j].append(psixij)
+                psiy_ij[i].append(psiyij)
+                psiy_ij[j].append(psiyij)
+                #due to divide-by-zero possibility, set equal to zero if equals nan
+                eij = np.nan_to_num(1-3*gamma[i][j]+4*gamma[i][j]*(psixij**4+psiyij**4)/((pxij**2+pyij**2)**2))
+                eta_ij[i].append(eij)
+                eta_ij[j].append(eij)
+                
+            #fill diagonal entry of matrices
+            phix_ij[i].append(zeros)
+            phiy_ij[i].append(zeros)
+            psix_ij[i].append(zeros)
+            psiy_ij[i].append(zeros)
+            eta_ij[i].append(zeros)
         
+        
+        phi2sum = np.sum(phi2, axis=0)
+        phi4sum = np.sum(phi4, axis=0)
+        vaphi2sum = np.sum(vaphi2, axis=0)
+        vaphi4sum = np.sum(vaphi4, axis=0)
+        #magic! the sum of all pairs of phi_i^2phi_j^2 can be found using the following trick
+        ssp2p2 = 0.5*(phi2sum**2-phi4sum) #cell
+        issp2p2 = 1./ssp2p2 #convenience, since division is expensive and its used a lot
+        issp2p2[np.isinf(issp2p2)] = 0
+        vassp2p2 = 0.5*(vaphi2sum**2-vaphi4sum) #VERTEX
+        ivassp2p2 = 1./vassp2p2 #convenience, since division is expensive and its used a lot
+        ivassp2p2[np.isinf(ivassp2p2)] = 0
+        #other sums are not so easy...
+        #the format for these names is the abbreviation of the term
+        #for example: s2e2npp2 is sum_{k!=j}_2epsilon^2*eta*phi_j*phi_k^2
+        sswp2p2 = 0 #cell
+        vasse2np2p2 = 0 #VERTEX
+        vas2e2npp2 = [] #vector, for each phi_j, VERTEX
+        s2wpp2 = [] #vector, for each phi_j, cell
+        s2pp2 = [] #vector, for each phi_j, cell
+        vas2pp2 = [] #vector, for each phi_j, VERTEX
+        de2dpxj = [] #vector of de^2/dphi_{x,j}, for each phi_j, VERTEX
+        de2dpyj = [] #vector of de^2/dphi_{y,j}, for each phi_j, VERTEX
+        de2dq1 = 0 #vac
+        de2dq4 = 0 #vac
+        for i in range(len(phi)):
+            vas2e2npp2.append(0)
+            s2wpp2.append(0)
+            de2dpxj.append(0)
+            de2dpyj.append(0)
+            s2pp2.append(2*phi[i]*(phi2sum-phi2[i]))
+            vas2pp2.append(2*vaphi[i]*(vaphi2sum-vaphi2[i]))
+            for j in range(i):
+                sswp2p2 += _w[i][j]*phi2[i]*phi2[j]
+                vasse2np2p2 += ebar2[i][j]*eta_ij[i][j]*vaphi2[i]*vaphi2[j]
+                vas2e2npp2[i] += 2*ebar2[i][j]*eta_ij[i][j]*vaphi[i]*vaphi2[j]
+                vas2e2npp2[j] += 2*ebar2[i][j]*eta_ij[i][j]*vaphi[j]*vaphi2[i]
+                s2wpp2[i] += 2*_w[i][j]*phi[i]*phi2[j]
+                s2wpp2[j] += 2*_w[i][j]*phi[j]*phi2[i]
+                gp2 = (phix_ij[i][j]**2+phiy_ij[i][j]**2)
+                gp4 = gp2**2
+                gp8 = gp4**2
+                psix3 = psix_ij[i][j]**3
+                psiy3 = psiy_ij[i][j]**3
+                gp2psi4 = gp2*(psix3*psix_ij[i][j]+psiy3*psiy_ij[i][j])
+                dedpx = np.nan_to_num(16*gamma[i][j]*ebar2[i][j]*vaphi2[i]*vaphi2[j]*((gp4*(psix3*q2q2+psiy3*qq2)-gp2psi4*phix_ij[i][j])/gp8))
+                dedpy = np.nan_to_num(16*gamma[i][j]*ebar2[i][j]*vaphi2[i]*vaphi2[j]*((gp4*(psiy3*q2q2-psix3*qq2)-gp2psi4*phiy_ij[i][j])/gp8))
+                de2dpxj[i] += dedpx
+                de2dpxj[j] += dedpx
+                de2dpyj[i] += dedpy
+                de2dpyj[j] += dedpy
+                dpsixdq1 = 2*va_q1*phix_ij[i][j]-2*va_q4*phiy_ij[i][j]
+                dpsiydq1 = 2*va_q1*phiy_ij[i][j]+2*va_q4*phix_ij[i][j]
+                de2dq1 += np.nan_to_num(16*gamma[i][j]*ebar2[i][j]*vaphi2[i]*vaphi2[j]*(psix3*dpsixdq1+psiy3*dpsiydq1)/gp4)
+                dpsixdq4 = -2*va_q4*phix_ij[i][j]-2*va_q1*phiy_ij[i][j]
+                dpsiydq4 = -2*va_q4*phiy_ij[i][j]+2*va_q1*phix_ij[i][j]
+                de2dq4 += np.nan_to_num(16*gamma[i][j]*ebar2[i][j]*vaphi2[i]*vaphi2[j]*(psix3*dpsixdq4+psiy3*dpsiydq4)/gp4)
     
-    phi2sum = np.sum(phi2, axis=0)
-    phi4sum = np.sum(phi4, axis=0)
-    vaphi2sum = np.sum(vaphi2, axis=0)
-    vaphi4sum = np.sum(vaphi4, axis=0)
-    #magic! the sum of all pairs of phi_i^2phi_j^2 can be found using the following trick
-    ssp2p2 = 0.5*(phi2sum**2-phi4sum) #cell
-    issp2p2 = 1./ssp2p2 #convenience, since division is expensive and its used a lot
-    vassp2p2 = 0.5*(phi2sum**2-phi4sum) #VERTEX
-    ivassp2p2 = 1./vassp2p2 #convenience, since division is expensive and its used a lot
-    #other sums are not so easy...
-    #the format for these names is the abbreviation of the term
-    #for example: s2e2npp2 is sum_{k!=j}_2epsilon^2*eta*phi_j*phi_k^2
-    sswp2p2 = 0 #cell
-    sse2np2p2 = 0 #vac
-    s2e2npp2 = [] #vector, for each phi_j, vac
-    s2wpp2 = [] #vector, for each phi_j, cell
-    s2pp2 = [] #vector, for each phi_j, cell
-    de2dpxj = [] #vector of de^2/dphi_{x,j}, for each phi_j, VERTEX
-    de2dpyj = [] #vector of de^2/dphi_{y,j}, for each phi_j, VERTEX
-    de2dq1 = 0 #vac
-    de2dq4 = 0 #vac
-    for i in range(len(phi)):
-        s2e2npp2.append(0)
-        s2wpp2.append(0)
-        de2dpxj.append(0)
-        de2dpyj.append(0)
-        s2pp2.append(2*phi[i]*(phi2sum-phi2[i]))
-        for j in range(i):
-            sswp2p2 += _w[i][j]*phi2[i]*phi2[j]
-            sse2np2p2 += ebar2[i][j]*eta_ij[i][j]*vaphi2[i]*vaphi2[j]
-            s2e2npp2[i] += 2*ebar2[i][j]*eta_ij[i][j]*vaphi[i]*vaphi2[j]
-            s2e2npp2[j] += 2*ebar2[i][j]*eta_ij[i][j]*vaphi[j]*vaphi2[i]
-            s2wpp2[i] += 2*_w[i][j]*phi[i]*phi2[j]
-            s2wpp2[j] += 2*_w[i][j]*phi[j]*phi2[i]
-            gp2 = (phix_ij[i][j]**2+phiy_ij[i][j]**2)
-            gp4 = gp2**2
-            gp8 = gp4**2
-            psix3 = psix_ij[i][j]**3
-            psiy3 = psiy_ij[i][j]**3
-            gp2psi4 = gp2*(psix3*psix_ij[i][j]+psiy3*psiy_ij[i][j])
-            dedpx = np.nan_to_num(16*gamma[i][j]*ebar2[i][j]*vaphi2[i]*vaphi2[j]*((gp4*(psix3*q2q2+psiy3*qq2)-gp2psi4*phix_ij[i][j])/gp8))
-            dedpy = np.nan_to_num(16*gamma[i][j]*ebar2[i][j]*vaphi2[i]*vaphi2[j]*((gp4*(psiy3*q2q2-psix3*qq2)-gp2psi4*phiy_ij[i][j])/gp8))
-            de2dpxj[i] += dedpx
-            de2dpxj[j] += dedpx
-            de2dpyj[i] += dedpy
-            de2dpyj[j] += dedpy
-            dpsixdq1 = 2*va_q1*phix_ij[i][j]-2*va_q4*phiy_ij[i][j]
-            dpsiydq1 = 2*va_q1*phiy_ij[i][j]+2*va_q4*phix_ij[i][j]
-            de2dq1 += np.nan_to_num(16*gamma[i][j]*ebar2[i][j]*vaphi2[i]*vaphi2[j]*(psix3*dpsixdq1+psiy3*dpsiydq1)/gp4)
-            dpsixdq4 = -2*va_q4*phix_ij[i][j]-2*va_q1*phiy_ij[i][j]
-            dpsiydq4 = -2*va_q4*phiy_ij[i][j]+2*va_q1*phix_ij[i][j]
-            de2dq4 += np.nan_to_num(16*gamma[i][j]*ebar2[i][j]*vaphi2[i]*vaphi2[j]*(psix3*dpsixdq4+psiy3*dpsiydq4)/gp4)
-    
-    #convert nan values to zero, essentially eliminates this term if only 1 non-zero phase is present
-    de2dq1 = np.nan_to_num(de2dq1*ivassp2p2)
-    de2dq4 = np.nan_to_num(de2dq4*ivassp2p2)
-    dwdpj = [] #one for each phi_j, cell
-    de2dpj = [] #one for each phi_j, vac
-    
-    #compute e2 before vertex averaging, since we need its vertex value
-    e2 = sse2np2p2*ivassp2p2
-    
-    #vertex average arrays need to be averaged to find value on the cell
-    sse2np2p2 = va_ul(sse2np2p2, dim)
-    de2dq1 = va_ul(de2dq1, dim)
-    de2dq4 = va_ul(de2dq4, dim)
-    for i in range(len(phi)):
-        de2dpxj[i] = np.nan_to_num(de2dpxj[i]*ivassp2p2)
-        de2dpyj[i] = np.nan_to_num(de2dpyj[i]*ivassp2p2)
-        s2e2npp2[i] = va_ul(s2e2npp2[i], dim)
-        dwdpj.append((s2wpp2[i]*ssp2p2-sswp2p2*s2pp2[i])*issp2p2*issp2p2)
-        de2dpj.append((s2e2npp2[i]*ssp2p2-sse2np2p2*s2pp2[i])*issp2p2*issp2p2)
+        #convert nan values to zero, essentially eliminates this term if only 1 non-zero phase is present
+        de2dq1 = np.nan_to_num(de2dq1*ivassp2p2)
+        de2dq4 = np.nan_to_num(de2dq4*ivassp2p2)
+        dwdpj = [] #one for each phi_j, cell
+        de2dpj = [] #one for each phi_j, vac
         
-    w = sswp2p2*issp2p2
+        #compute e2 before vertex averaging, since we need its vertex value
+        e2 = np.nan_to_num(vasse2np2p2*ivassp2p2)
+    
+        #vertex average arrays need to be averaged to find value on the cell
+        de2dq1 = va_ul(de2dq1, dim)
+        de2dq4 = va_ul(de2dq4, dim)
         
-    return e2, w, de2dpj, de2dpxj, de2dpyj, dwdpj, de2dq1, de2dq4
+        
+        for i in range(len(phi)):
+            de2dpxj[i] = np.nan_to_num(de2dpxj[i]*ivassp2p2)
+            de2dpyj[i] = np.nan_to_num(de2dpyj[i]*ivassp2p2)
+            dwdpj.append(np.nan_to_num((s2wpp2[i]*ssp2p2-sswp2p2*s2pp2[i])*issp2p2*issp2p2))
+            de2dpj.append(np.nan_to_num((vas2e2npp2[i]*vassp2p2-vasse2np2p2*vas2pp2[i])*ivassp2p2*ivassp2p2))
+            de2dpj[i] = va_ul(de2dpj[i], dim)
+        
+        w = np.nan_to_num(sswp2p2*issp2p2)
+        
+        return e2, w, de2dpj, de2dpxj, de2dpyj, dwdpj, de2dq1, de2dq4
         
 
 def renormalize(q1, q4):
@@ -380,12 +385,26 @@ def loadArrays_nc(data_path, timestep):
     _phi = np.load(root_folder+"/data/"+data_path+'/phi_'+str(timestep)+'.npy')
     return timestep, _phi, _c, _q1, _q4
 
+def loadArrays_ncnp(data_path, timestep):
+    data = np.load(root_folder+"/data/"+data_path+'/data_'+str(timestep)+'.npy')
+    _q1 = data[0]
+    _q4 = data[1]
+    _phi = list(data[2:(2+len(phases))])
+    _c = list(data[(2+len(phases)):(2+len(phases)+len(components))])
+    return timestep, _phi, _c, _q1, _q4
+
 def saveArrays_nc(data_path, timestep, phi, c, q1, q4):
     np.save(root_folder+"/data/"+data_path+'/phi_'+str(timestep), phi)
     for i in range(len(c)):
         np.save(root_folder+"/data/"+data_path+'/c'+str(i+1)+'_'+str(timestep), c[i])
     np.save(root_folder+"/data/"+data_path+'/q1_'+str(timestep), q1)
     np.save(root_folder+"/data/"+data_path+'/q4_'+str(timestep), q4)
+    
+def saveArrays_ncnp(data_path, timestep, phi, c, q1, q4):
+    data = np.concatenate((np.expand_dims(q1, axis=0), np.expand_dims(q4, axis=0)), axis=0)
+    data = np.concatenate((data, phi), axis=0)
+    data = np.concatenate((data, c), axis=0)
+    np.save(root_folder+"/data/"+data_path+'/data_'+str(timestep), data)
 
 def applyBCs_nc(phi, c, q1, q4, nbc):
     if(nbc[0]):
@@ -404,6 +423,30 @@ def applyBCs_nc(phi, c, q1, q4, nbc):
             c[i][-1,:] = c[i][-2,:]
         phi[0,:] = phi[1,:]
         phi[-1,:] = phi[-2,:]
+        q1[0,:] = q1[1,:]
+        q1[-1,:] = q1[-2,:]
+        q4[0,:] = q4[1,:]
+        q4[-1,:] = q4[-2,:]
+        
+def applyBCs_ncnp(phi, c, q1, q4, nbc):
+    if(nbc[0]):
+        for i in range(len(c)):
+            c[i][:,0] = c[i][:,1]
+            c[i][:,-1] = c[i][:,-2]
+        for i in range(len(phi)):
+            phi[i][:,0] = phi[i][:,1]
+            phi[i][:,-1] = phi[i][:,-2]
+        q1[:,0] = q1[:,1]
+        q1[:,-1] = q1[:,-2]
+        q4[:,0] = q4[:,1]
+        q4[:,-1] = q4[:,-2]
+    if(nbc[1]):
+        for i in range(len(c)):
+            c[i][0,:] = c[i][1,:]
+            c[i][-1,:] = c[i][-2,:]
+        for i in range(len(phi)):
+            phi[i][0,:] = phi[i][1,:]
+            phi[i][-1,:] = phi[i][-2,:]
         q1[0,:] = q1[1,:]
         q1[-1,:] = q1[-2,:]
         q4[0,:] = q4[1,:]
@@ -455,6 +498,42 @@ def plotImages_nc(phi, c, q4, nbc, data_path, step):
     cbar = fig.colorbar(cax, ticks=[np.min(q4), np.max(q4)])
     plt.savefig(root_folder+"/data/"+data_path+'/q4_'+str(step)+'.png')
     
+def plotImages_ncnp(phi, c, q4, nbc, data_path, step):
+    """
+    Plots the phi (order), c (composition), and q4 (orientation component) fields for a given step
+    Saves images to the defined path
+    """
+    colors = [(0, 0, 1), (0, 1, 1), (0, 1, 0), (1, 1, 0), (1, 0, 0)]
+    cm = LinearSegmentedColormap.from_list('rgb', colors)
+    colors2 = [(0, 0, 1), (1, 1, 0), (1, 0, 0)]
+    cm2 = LinearSegmentedColormap.from_list('rgb', colors2)
+    
+    plt.rcParams['figure.figsize'] = 4, 4
+
+    for i in range(len(phi)):
+        fig, ax = plt.subplots()
+        plt.title('phi_'+phases[i])
+        cax = plt.imshow(coreSection(phi[i], nbc), cmap=cm2)
+        cbar = fig.colorbar(cax, ticks=[np.min(phi[i]), np.max(phi[i])])
+        plt.savefig(root_folder+"/data/"+data_path+'/phi'+str(i+1)+'_'+str(step)+'.png')
+    for i in range(len(c)):
+        fig, ax = plt.subplots()
+        plt.title('c_'+components[i])
+        cax = plt.imshow(coreSection(c[i], nbc), cmap=cm)
+        cbar = fig.colorbar(cax, ticks=[np.min(c[i]), np.max(c[i])])
+        plt.savefig(root_folder+"/data/"+data_path+'/c'+str(i+1)+'_'+str(step)+'.png')
+    c_N = 1-np.sum(c, axis=0)
+    fig, ax = plt.subplots()
+    plt.title('c_'+components[len(c)])
+    cax = plt.imshow(coreSection(c_N, nbc), cmap=cm)
+    cbar = fig.colorbar(cax, ticks=[np.min(c_N), np.max(c_N)])
+    plt.savefig(root_folder+"/data/"+data_path+'/c'+str(len(c)+1)+'_'+str(step)+'.png')
+    fig, ax = plt.subplots()
+    plt.title('q4')
+    cax = plt.imshow(coreSection(q4, nbc), cmap=cm2)
+    cbar = fig.colorbar(cax, ticks=[np.min(q4), np.max(q4)])
+    plt.savefig(root_folder+"/data/"+data_path+'/q4_'+str(step)+'.png')
+    
 def npvalue(var, string, tdb):
     """
     Returns a numpy float from the sympy expression gotten from pycalphad
@@ -488,3 +567,35 @@ def get_nbcs_for_sim(data_path):
                 return nbcs
         #if it can't find this line, this is VERY BAD
         raise EOFError('Could not find nbcs used for simulation. This is very bad!')
+        
+def multiObstacle(phi):
+    #multiObstacle algorithm, derived from Cogswell2018
+    #currently only for 2 and 3 phase models
+    if(len(phi) > 3):
+        raise ValueError('utils.multiObstacle is only coded for 2 and 3 phase models atm!')
+    if(len(phi) == 3):
+        bools = np.logical_and(phi[0]-phi[1] > 1,phi[0]-phi[2] > 1)
+        phi[0] = np.where(bools, 1, phi[0])
+        phi[1] = np.where(bools, 0, phi[1])
+        phi[2] = np.where(bools, 0, phi[2])
+        bools = np.logical_and(phi[1]-phi[0] > 1,phi[1]-phi[2] > 1)
+        phi[0] = np.where(bools, 0, phi[0])
+        phi[1] = np.where(bools, 1, phi[1])
+        phi[2] = np.where(bools, 0, phi[2])
+        bools = np.logical_and(phi[2]-phi[1] > 1,phi[2]-phi[0] > 1)
+        phi[0] = np.where(bools, 0, phi[0])
+        phi[1] = np.where(bools, 0, phi[1])
+        phi[2] = np.where(bools, 1, phi[2])
+        bools = phi[0] < 0
+        phi[1] = np.where(bools, phi[1]+phi[0]/2, phi[1])
+        phi[2] = np.where(bools, phi[2]+phi[0]/2, phi[2])
+        phi[0] = np.where(bools, 0, phi[0])
+        bools = phi[1] < 0
+        phi[0] = np.where(bools, phi[0]+phi[1]/2, phi[0])
+        phi[2] = np.where(bools, phi[2]+phi[1]/2, phi[2])
+        phi[1] = np.where(bools, 0, phi[1])
+        bools = phi[2] < 0
+        phi[1] = np.where(bools, phi[1]+phi[2]/2, phi[1])
+        phi[0] = np.where(bools, phi[0]+phi[2]/2, phi[0])
+        phi[2] = np.where(bools, 0, phi[2])
+    return phi

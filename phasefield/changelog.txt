@@ -1,3 +1,7 @@
+1.2:
+Multiorder model works, example simulation in phasefield.ipynb runs a 3 phase, 3 component simulation
+Now requires numpy 1.13! numpy.unique(array, axis=0) function was added in 1.13
+
 1.1.2:
 Finished first pass at coding up engine for multicomponent, multiorder model
 Offloaded several intensive calculations to the function doublesums in pf_utils, to begin abstracting and cleaning up pf_engine fully

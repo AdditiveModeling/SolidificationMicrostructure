@@ -16,12 +16,13 @@ d = dx/0.94 #interfacial thickness
 
 #TDB parameters, lists are used for N-component models since we dont know how many variables we need
 W = [] #Well size matrix, term for every pair of different phases (for n phases, there are (n^2-n)/2 unique terms)
-kij = [] #Order mobility couples, matrix for each pair of phases
+kijbar = [] #Order mobility couples, matrix for each pair of phases. Must be combined with phase information to compute actual mobilities
 D = [] #Diffusion in each phase, cm^2/s. One per phase. Assumed to be constant amongst all species (no Kirkendall effect!)
 v_m = 0 #Molar volume, cm^3/mol. Currently considered constant, model does not deal with volume mismatch
 M_qmax = [] #orientational mobility, 1/(s*J), term for each phase
 H = [] #Orientational Interface energy, J/(K*cm). Term for each phase
 ebar2 = [] #epsilon^2 interfacial energy matrix, term for every pair of different phases (for n phases, there are (n^2-n)/2 unique terms)
+eqbar = 0 #interfacial orientation energy term
 y_e = [] #anisotropy matrix, term for every pair of different phases (for n phases, there are (n^2-n)/2 unique terms)
 
 #fields, to allow for access outside the simulate function (debugging!)
@@ -30,262 +31,64 @@ c = [] #multiple components for n-component model!
 q1 = 0 ###################### Make this an array as well! would make it easier to transition to 3d! #########################
 q4 = 0
 T = 0
-
-def init_tdb_vars(tdb):
+    
+def init_tdb_vars_ncnp(tdb):
     """
     Modifies the global vars which are parameters for the engine. Called from the function utils.preinitialize
+    This function supports arbitrary number of phases *and* components
     Returns True if variables are loaded successfully, False if certain variables dont exist in the TDB
     If false, preinitialize will print an error saying the TDB doesn't have enough info to run the sim
     """
-    global L, T_M, S, B, W, M, D_S, D_L, v_m, M_qmax, H, ebar, eqbar, dt, y_e
+    global W, kijbar, D, v_m, M_qmax, H, ebar2, eqbar, dt, y_e
     comps = utils.components
     try:
-        L = [] #latent heats, J/cm^3
-        T_M = [] #melting temperatures, K
         S = [] #surface energies, J/cm^2
-        B = [] #linear kinetic coefficients, cm/(K*s)
         W = [] #Well size
-        M = [] #Order mobility coefficient
-        T = tdb.symbols[comps[0]+"_L"].free_symbols.pop()
-        for i in range(len(comps)):
-            L.append(utils.npvalue(T, comps[i]+"_L", tdb))
-            T_M.append(utils.npvalue(T, comps[i]+"_TM", tdb))
-            S.append(utils.npvalue(T, comps[i]+"_S", tdb))
-            B.append(utils.npvalue(T, comps[i]+"_B", tdb))
-            W.append(3*S[i]/(np.sqrt(2)*T_M[i]*d))
-            M.append(T_M[i]*T_M[i]*B[i]/(6*np.sqrt(2)*L[i]*d)/1574.)
-        D_S = utils.npvalue(T, "D_S", tdb)
-        D_L = utils.npvalue(T, "D_L", tdb)
+        kijbar = [] #Order mobility coefficient
+        D = []
+        ebar2 = [] #interfacial order energy term
+        M_qmax = [] #orientation mobility
+        H = []
+        y_e = []
+        T = tdb.symbols["V_M"].free_symbols.pop()
         v_m = utils.npvalue(T, "V_M", tdb)
-        M_qmax = utils.npvalue(T, "M_Q", tdb)
-        H = utils.npvalue(T, "H", tdb)
-        y_e = utils.npvalue(T, "Y_E", tdb)
-        ebar = np.sqrt(6*np.sqrt(2)*S[1]*d/T_M[1])
-        eqbar = 0.5*ebar
-        dt = dx*dx/5./D_L/8
-        #print(L, T_M, S, B)
-        #print(D_S, D_L, v_m, M_qmax, H, dt)
+        for i in range(len(utils.phases)):
+            S.append([])
+            W.append([])
+            kijbar.append([])
+            ebar2.append([])
+            y_e.append([])
+            for j in range(i):
+                S_value = utils.npvalue(T, "S_"+utils.phases[j]+"_"+utils.phases[i], tdb)
+                S[i].append(S_value)
+                S[j].append(S_value)
+                W_value = 3*S_value/d/1574.
+                W[i].append(W_value)
+                W[j].append(W_value)
+                kij_value = utils.npvalue(T, "K_"+utils.phases[j]+"_"+utils.phases[i], tdb)
+                kijbar[i].append(kij_value)
+                kijbar[j].append(kij_value)
+                ebar2_value = 6*S_value*d/1574.
+                ebar2[i].append(ebar2_value)
+                ebar2[j].append(ebar2_value)
+                ye_value = utils.npvalue(T, "Y_"+utils.phases[j]+"_"+utils.phases[i], tdb)
+                y_e[i].append(ye_value)
+                y_e[j].append(ye_value)
+            S[i].append(0)
+            W[i].append(0)
+            kijbar[i].append(0)
+            ebar2[i].append(0)
+            y_e[i].append(0)
+            D.append(utils.npvalue(T, "D_"+utils.phases[i], tdb))
+            M_qmax.append(utils.npvalue(T, "MQ_"+utils.phases[i], tdb))
+            H.append(utils.npvalue(T, "H_"+utils.phases[i], tdb))
+            
+        eqbar = 0.5*ebar2[0][1] #interfacial orientation term, here we choose an arbitrary interface to be relative to
+        dt = dx*dx/5./np.max(D)/20
         return True
-    except:
+    except Exception as e:
+        print(e)
         return False
-    
-def simulate_nc(data_path, initialStep, steps, initT, gradT, dTdt):
-    global phi, c, q1, q4, T
-    if not os.path.isfile(utils.root_folder+"/data/"+data_path+"/info.txt"):
-        print("Simulation has not been initialized yet - aborting engine!")
-        return
-    
-    info = open(utils.root_folder+"/data/"+data_path+"/info.txt", 'a')
-    info.write("  New Simulation Run:\n")
-    info.write("    Initial Step: "+str(initialStep)+"\n")
-    info.write("    Number of steps to run: "+str(steps)+"\n")
-    info.write("    Initial Temperature on left edge: "+str(initT)+"\n")
-    info.write("    Temperature gradient (K/cell): "+str(gradT)+"\n")
-    info.write("    Change in temperature over time (K/time_step): "+str(dTdt)+"\n\n")
-    info.close()
-    
-    nbc = utils.get_nbcs_for_sim(data_path)
-    #check to make sure correct TDB isn't already loaded, to avoid having to reinitialize the ufuncs in pycalphad
-    if not utils.tdb_path == utils.get_tdb_path_for_sim(data_path):
-        utils.tdb_path = utils.get_tdb_path_for_sim(data_path)
-        utils.load_tdb(utils.tdb_path)
-    
-    #load arrays. As of multicomponent model, c is a list of arrays, one per independent component (N-1 total, for an N component model)
-    step, phi, c, q1, q4 = utils.loadArrays_nc(data_path, initialStep)
-    shape = phi.shape #get the shape of the simulation region from one of the arrays
-    
-    #temperature
-    T = (initT+0.0)*np.ones(shape) #convert T to double just in case
-    T += np.linspace(0, gradT*shape[1], shape[1])
-    T += step*dTdt
-
-    for i in range(steps):
-        step += 1
-        g = utils._g(phi)
-        h = utils._h(phi)
-        m = 1-h;
-        M_q = 1e-6 + (M_qmax-1e-6)*m
-    
-        lq1 = utils.grad2(q1, dx, dim)
-        lq4 = utils.grad2(q4, dx, dim)
-    
-        #additional interpolating functions
-        p = phi*phi
-        hprime = utils._hprime(phi)
-        gprime = utils._gprime(phi)
-    
-        #quaternion gradient terms
-        gq1l = utils.grad_l(q1, dx, dim)
-        gq4l = utils.grad_l(q4, dx, dim)
-        gqsl = []
-        for j in range(dim):
-            gqsl.append(gq1l[j]*gq1l[j]+gq4l[j]*gq4l[j])
-    
-        gq1r = utils.grad_r(q1, dx, dim)
-        gq4r = utils.grad_r(q4, dx, dim)
-    
-        gqsr = []
-        for j in range(dim):
-            gqsr.append(np.roll(gqsl[j], -1, j))
-    
-        gqs = (gqsl[0]+gqsr[0])/2
-        for j in range(1, dim):
-            gqs += (gqsl[j]+gqsr[j])/2
-        rgqs_0 = np.sqrt(gqs)
-    
-        gphi = utils.grad_l(phi, dx, 2)
-        vertex_averaged_gphi = []
-        vertex_averaged_gphi.append((gphi[0]+np.roll(gphi[0], 1, 1))/2.)
-        vertex_averaged_gphi.append((gphi[1]+np.roll(gphi[1], 1, 0))/2.)
-        vertex_averaged_q1 = (q1 + np.roll(q1, 1, 0))/2.
-        vertex_averaged_q1 = (vertex_averaged_q1 + np.roll(vertex_averaged_q1, 1, 1))/2.
-        vertex_averaged_q4 = (q4 + np.roll(q4, 1, 0))/2.
-        vertex_averaged_q4 = (vertex_averaged_q4 + np.roll(vertex_averaged_q4, 1, 1))/2.
-        vertex_averaged_T = (T + np.roll(T, 1, 0))/2.
-        vertex_averaged_T = (vertex_averaged_T + np.roll(vertex_averaged_T, 1, 1))/2.
-        
-        a2_b2 = vertex_averaged_q1*vertex_averaged_q1-vertex_averaged_q4*vertex_averaged_q4
-        ab2 = 2.*vertex_averaged_q1*vertex_averaged_q4
-        
-        vertex_centered_gpsi = []
-        vertex_centered_gpsi.append(a2_b2*vertex_averaged_gphi[0] - ab2*vertex_averaged_gphi[1])
-        vertex_centered_gpsi.append(a2_b2*vertex_averaged_gphi[1] + ab2*vertex_averaged_gphi[0])
-        
-        psi_xxy = vertex_centered_gpsi[0]*vertex_centered_gpsi[0]*vertex_centered_gpsi[1]
-        psi_xyy = vertex_centered_gpsi[0]*vertex_centered_gpsi[1]*vertex_centered_gpsi[1]
-        psi_xxyy = psi_xxy*vertex_centered_gpsi[1]
-        
-        vertex_centered_mgphi2 = vertex_averaged_gphi[0]*vertex_averaged_gphi[0] + vertex_averaged_gphi[1]*vertex_averaged_gphi[1]
-    
-        #"clip" the grid: if values are smaller than "smallest", set them equal to "smallest"
-        #also clip the mgphi values to avoid divide by zero errors!
-        smallest = 1.5
-        for j in range(dim):
-            gqsl[j] = np.clip(gqsl[j], smallest, np.inf)
-            gqsr[j] = np.clip(gqsr[j], smallest, np.inf)
-            
-        vertex_centered_mgphi2 = np.clip(vertex_centered_mgphi2, 0.000000001, np.inf)
-              
-        rgqsl = []
-        rgqsr = []
-        for j in range(dim):
-            rgqsl.append(np.sqrt(gqsl[j]))
-            rgqsr.append(np.sqrt(gqsr[j]))
-                
-        #compute values from tdb
-        G_L, dGLdc = utils.compute_tdb_energy_nc(T, c, "LIQUID")
-        G_S, dGSdc = utils.compute_tdb_energy_nc(T, c, "FCC_A1")
-        
-        #change in c1, c2
-        M_c = []
-        dFdc = []
-        deltac = []
-        #find the standard deviation as an array 
-        std_c=np.sqrt(np.absolute(2*R*T/v_m))
-        for j in range(len(c)):
-            #find the actual random noise
-            noise_c=np.random.normal(0, std_c, phi.shape)
-            M_c.append(v_m*c[j]*(D_S+m*(D_L-D_S))/R/1574.)
-            #add the change in noise inside the functional
-            dFdc.append((dGSdc[j] + m*(dGLdc[j]-dGSdc[j]))/v_m + (W[j]-W[len(c)])*g*T+noise_c)
-        for j in range(len(c)):
-            deltac.append(utils.divagradb(M_c[j]*(1-c[j]), dFdc[j], dx, dim))
-            for k in range(len(c)):
-                if not (j == k):
-                    deltac[j] -= utils.divagradb(M_c[j]*c[k], dFdc[k], dx, dim)
-        
-        #change in phi
-        divTgradphi = utils.divagradb(T, phi, dx, dim)
-            
-        #compute overall order mobility, from order mobility coefficients
-        c_N = 1-np.sum(c, axis=0)
-        M_phi = c_N*M[len(c)]
-        for j in range(len(c)):
-            M_phi += c[j]*M[j]
-                
-        #compute well size term for N-components
-        well = c_N*W[len(c)]
-        for j in range(len(c)):
-            well += c[j]*W[j]
-        well *= (T*gprime)
-            
-        psix3 = vertex_centered_gpsi[0]*vertex_centered_gpsi[0]*vertex_centered_gpsi[0]
-        psiy3 = vertex_centered_gpsi[1]*vertex_centered_gpsi[1]*vertex_centered_gpsi[1]
-        pf_comp_x = 8*y_e*T*((2*a2_b2*psix3 + 2*ab2*psiy3)/vertex_centered_mgphi2 - vertex_averaged_gphi[0]*(psix3*vertex_centered_gpsi[0] + psiy3*vertex_centered_gpsi[1])/(vertex_centered_mgphi2*vertex_centered_mgphi2))
-        pf_comp_x = (np.roll(pf_comp_x, -1, 0) - pf_comp_x)/dx
-        pf_comp_x = (np.roll(pf_comp_x, -1, 1) + pf_comp_x)/2.
-        pf_comp_y = 8*y_e*T*((2*a2_b2*psiy3 - 2*ab2*psix3)/vertex_centered_mgphi2 - vertex_averaged_gphi[1]*(psix3*vertex_centered_gpsi[0] + psiy3*vertex_centered_gpsi[1])/(vertex_centered_mgphi2*vertex_centered_mgphi2))
-        pf_comp_y = (np.roll(pf_comp_y, -1, 1) - pf_comp_y)/dx
-        pf_comp_y = (np.roll(pf_comp_y, -1, 0) + pf_comp_y)/2.
-        deltaphi = M_phi*(ebar*ebar*((1-3*y_e)*divTgradphi + pf_comp_x + pf_comp_y)-30*g*(G_S-G_L)/v_m-well-4*H*T*phi*rgqs_0*1574.)
-            
-        #old noise from Warren1995:
-        #randArray = 2*np.random.random_sample(shape)-1
-        #alpha = 0.3
-        #deltaphi += M_phi*alpha*randArray*(16*g)*(30*g*(G_S-G_L)/v_m+well)
-            
-        #noise in phi, based on Langevin Noise
-        std_phi=np.sqrt(np.absolute(2*R*M_phi*T/v_m))
-        noise_phi=np.random.normal(0, std_phi, phi.shape)
-        deltaphi += noise_phi
-        
-        #changes in q, part 1
-        dq_component = 2*H*T*p
-    
-        gaq1 = utils.gaq(gq1l, gq1r, rgqsl, rgqsr, dq_component, dx, dim)
-        gaq4 = utils.gaq(gq4l, gq4r, rgqsl, rgqsr, dq_component, dx, dim)
-        
-        q1px = vertex_averaged_q1*vertex_averaged_gphi[0]
-        q1py = vertex_averaged_q1*vertex_averaged_gphi[1]
-        q4px = vertex_averaged_q4*vertex_averaged_gphi[0]
-        q4py = vertex_averaged_q4*vertex_averaged_gphi[1]
-        
-        t1_temp = (16*ebar*ebar*T*y_e/vertex_centered_mgphi2)*(psi_xyy*(q1px - q4py) + psi_xxy*(q1py + q4px))
-        t4_temp = (16*ebar*ebar*T*y_e/vertex_centered_mgphi2)*(psi_xyy*(-q4px - q1py) + psi_xxy*(-q4py + q1px))
-        cc_t1_temp = (t1_temp + np.roll(t1_temp, -1, 0))/2.
-        cc_t1_temp = (cc_t1_temp + np.roll(cc_t1_temp, -1, 1))/2.
-        cc_t4_temp = (t4_temp + np.roll(t4_temp, -1, 0))/2.
-        cc_t4_temp = (cc_t4_temp + np.roll(cc_t4_temp, -1, 1))/2.
-        
-        t1 = eqbar*eqbar*lq1+(gaq1)*1574. + cc_t1_temp
-        t4 = eqbar*eqbar*lq4+(gaq4)*1574. + cc_t4_temp
-        lmbda = (q1*t1+q4*t4)
-        deltaq1 = M_q*(t1-q1*lmbda)
-        deltaq4 = M_q*(t4-q4*lmbda)
-    
-        #changes in q
-    
-    
-    
-        #apply changes
-        for j in range(len(c)):
-            c[j] += deltac[j]*dt
-        phi += deltaphi*dt
-        q1 += deltaq1*dt
-        q4 += deltaq4*dt
-        utils.applyBCs_nc(phi, c, q1, q4, nbc)
-        T += dTdt
-        if(i%10 == 0):
-            q1, q4 = utils.renormalize(q1, q4)
-        
-        #This code segment prints the progress after every 5% of the simulation is done (for convenience)
-        if(steps > 19):
-            if(i%(steps/20) == 0):
-                print(str(5*i/(steps/20))+"% done...")
-    
-        #This code segment saves the arrays every 500 steps, and adds nuclei
-        #note: nuclei are added *before* saving the data, so stray nuclei may be found before evolving the system
-        if(step%500 == 0):
-            #find the stochastic nucleation critical probabilistic cutoff
-            #attn -- Q and T_liq are hard coded parameters for Ni-10%Cu
-            Q0=8*10**5 #activation energy of migration
-            T_liq=1697 #Temperature of Liquidus (K)
-            J0,p11=utils.find_Pn(T_liq, T, Q0, dt) 
-            #print(J0)
-            phi, q1, q4=utils.add_nuclei(phi, q1, q4, p11, len(phi))
-            utils.saveArrays_nc(data_path, step, phi, c, q1, q4)
-
-    print("Done")
     
 def simulate_ncnp(data_path, initialStep, steps, initT, gradT, dTdt):
     global phi, c, q1, q4, T
@@ -316,8 +119,13 @@ def simulate_ncnp(data_path, initialStep, steps, initT, gradT, dTdt):
     T = (initT+0.0)*np.ones(shape) #convert T to double just in case
     T += np.linspace(0, gradT*shape[1], shape[1])
     T += step*dTdt
+    
+    #debug var, if true, print out lots of extra information after every iteration
+    #warning: only run for a handful of steps if you use this!
+    DEBUG = False
 
     for i in range(steps):
+        
         step += 1
         g = utils._g(phi)
         gp = []
@@ -325,19 +133,57 @@ def simulate_ncnp(data_path, initialStep, steps, initT, gradT, dTdt):
         hp = []
         p = []
         dTe2dphi = []
+        pbp = []
+        kij = []
+        smgphi2 = np.zeros(shape)
+        vasmgphi2 = np.zeros(shape)
         M_q = np.zeros(shape)
+        
+        #compute needed terms
+        e2, w, de2dpj, de2dpxj, de2dpyj, dwdpj, de2dq1, de2dq4 = utils.doublesums(phi, q1, q4, ebar2, W, y_e, dx)
+        
+        #print(T*e2)
         for j in range(len(phi)):
             h.append(utils._h(phi[j]))
             hp.append(utils._hprime(phi[j]))
-            M_q = (M_q[j])*h[j]
+            M_q += (M_qmax[j])*h[j]
             p.append(phi[j]**2)
             gp.append(utils._gprime(phi, j))
-            dTe2dphi.append(utils.divagradb(T*e2, phi[j], dx, dim))
+            gphi = utils.grad_r(phi[j], dx, dim)
+            smgphi2 += 0.25*((gphi[0]+np.roll(gphi[0], 1, 0))**2)
+            smgphi2 += 0.25*((gphi[1]+np.roll(gphi[1], 1, 1))**2)
+            vasmgphi2 += 0.25*((gphi[0]+np.roll(gphi[0], -1, 1))**2)
+            vasmgphi2 += 0.25*((gphi[1]+np.roll(gphi[1], -1, 0))**2)
+            dTe2dphi.append(T*utils.va_ul(e2, dim)*utils.grad2(phi[j], dx, dim))
+            #phi term used for computing mobilities
+            phi_m = 0.5*(phi[j] + np.roll(phi[j], 1, 0))
+            phi_m = 0.5*(phi_m + np.roll(phi_m, 1, 1))
+            phi_m = 0.5*(phi_m + np.roll(phi_m, -1, 0))
+            phi_m = 0.5*(phi_m + np.roll(phi_m, -1, 1))
+            with np.errstate(divide='ignore', invalid='ignore'):
+                #this should be absolute valued, but since we use a cutoff function, there are no negative values
+                pbp.append(phi_m/(1-phi_m))
             
-        va_T = va_br(T, dim)
-        
-        #compute needed terms
-        e2, w, de2dpj, de2dpxj, de2dpyj, dwdpj, de2dq1, de2dq4 = doublesums(phi, q1, q4, ebar2, W, y_e, dx)
+        #kij matrix computation
+        for j in range(len(phi)):
+            kij.append([])
+            for k in range(j):
+                with np.errstate(divide='ignore', invalid='ignore'):
+                    kij_value = kijbar[j][k]*pbp[j]*pbp[k]
+                kij_value[np.isnan(kij_value)] = 0 #(values that come up as nan only happens if one order param equals 1, so no phi motion can happen anyways)
+                kij_value[np.isinf(kij_value)] = 0 #(same for +/- inf)
+                kij[j].append(kij_value)
+                kij[k].append(kij_value)
+            kij[j].append(0)
+            
+        #kij matrix computation round 2: set diagonal elements to negative sum of row
+        for j in range(len(phi)):
+            diag_element = 0
+            for k in range(len(phi)):
+                diag_element += kij[j][k]
+            kij[j][j] -= diag_element
+          
+        va_T = utils.va_br(T, dim)
         
         #quaternion gradient terms
         gq1l = utils.grad_l(q1, dx, dim)
@@ -386,12 +232,12 @@ def simulate_ncnp(data_path, initialStep, steps, initT, gradT, dTdt):
         std_c=np.sqrt(np.absolute(2*R*T/v_m))
         for j in range(len(c)):
             #find the actual random noise
-            noise_c=np.random.normal(0, std_c, phi.shape)
+            noise_c=np.random.normal(0, std_c, q1.shape)
             temp = 0 #mobility
             temp2 = 0 #energy
-            for i in range(len(phi)):
-                temp += h[i]*D[i]
-                temp2 += h[i]*dGdc[i]
+            for k in range(len(phi)):
+                temp += h[k]*D[k]
+                temp2 += h[k]*dGdc[k][j]
             M_c.append(v_m*c[j]*temp/R/1574.)
             #add the change in noise inside the functional
             dFdc.append(temp2/v_m+noise_c)
@@ -401,35 +247,20 @@ def simulate_ncnp(data_path, initialStep, steps, initT, gradT, dTdt):
                 if not (j == k):
                     deltac[j] -= utils.divagradb(M_c[j]*c[k], dFdc[k], dx, dim)
         
-        #change in phi
-        divTgradphi = utils.divagradb(T, phi, dx, dim)
-            
-        #compute overall order mobility, from order mobility coefficients
-        c_N = 1-np.sum(c, axis=0)
-        M_phi = c_N*M[len(c)]
-        for j in range(len(c)):
-            M_phi += c[j]*M[j]
-                
-        #compute well size term for N-components
-        well = c_N*W[len(c)]
-        for j in range(len(c)):
-            well += c[j]*W[j]
-        well *= (T*gprime)
-        
         dFdphi = []
         for j in range(len(phi)):
-            dFdphi.append(0.5*T*de2dpj[j]*smgphi2 + h[j]*G[j]+dwdpj[j]*g[j]*T + w*gp[j]*T+H[j]*T*(2*phi[j])*rgqs_0 - vg_ul(0.5*va_T*de2dpxj*vasmgphi2, dim, 0, dx) - vg_ul(0.5*va_T*de2dpyj*vasmgphi2, dim, 1, dx) - dTe2dphi[j])
+            #noise in phi, based on Langevin Noise
+            std_phi=np.sqrt(np.absolute(2*R*T/v_m/np.max(kijbar)))
+            noise_phi=np.random.normal(0, std_phi, phi[j].shape)
+            
+            #compute dFdphi terms, including the langevin noise
+            dFdphi.append(0.5*T*de2dpj[j]*smgphi2 + hp[j]*G[j]/v_m+dwdpj[j]*g*T + w*gp[j]*T+H[j]*T*(2*phi[j])*rgqs_0 - utils.vg_ul(0.5*va_T*de2dpxj[j]*vasmgphi2, dim, 0, dx) - utils.vg_ul(0.5*va_T*de2dpyj[j]*vasmgphi2, dim, 1, dx) - dTe2dphi[j])#+noise_phi
         
         deltaphi = []
         for k in range(len(phi)):
             deltaphi.append(0)
             for j in range(len(phi)):
                 deltaphi[k] += kij[k][j]*dFdphi[j]
-            
-        #noise in phi, based on Langevin Noise
-        std_phi=np.sqrt(np.absolute(2*R*M_phi*T/v_m))
-        noise_phi=np.random.normal(0, std_phi, phi.shape)
-        deltaphi += noise_phi
         
         #changes in q, part 1
         dq_component = 0
@@ -440,18 +271,6 @@ def simulate_ncnp(data_path, initialStep, steps, initT, gradT, dTdt):
         gaq1 = utils.gaq(gq1l, gq1r, rgqsl, rgqsr, dq_component, dx, dim)
         gaq4 = utils.gaq(gq4l, gq4r, rgqsl, rgqsr, dq_component, dx, dim)
         
-        q1px = vertex_averaged_q1*vertex_averaged_gphi[0]
-        q1py = vertex_averaged_q1*vertex_averaged_gphi[1]
-        q4px = vertex_averaged_q4*vertex_averaged_gphi[0]
-        q4py = vertex_averaged_q4*vertex_averaged_gphi[1]
-        
-        t1_temp = (16*ebar*ebar*T*y_e/vertex_centered_mgphi2)*(psi_xyy*(q1px - q4py) + psi_xxy*(q1py + q4px))
-        t4_temp = (16*ebar*ebar*T*y_e/vertex_centered_mgphi2)*(psi_xyy*(-q4px - q1py) + psi_xxy*(-q4py + q1px))
-        cc_t1_temp = (t1_temp + np.roll(t1_temp, -1, 0))/2.
-        cc_t1_temp = (cc_t1_temp + np.roll(cc_t1_temp, -1, 1))/2.
-        cc_t4_temp = (t4_temp + np.roll(t4_temp, -1, 0))/2.
-        cc_t4_temp = (cc_t4_temp + np.roll(cc_t4_temp, -1, 1))/2.
-        
         lq1 = utils.grad2(q1, dx, dim)
         lq4 = utils.grad2(q4, dx, dim)
         t1 = eqbar*eqbar*lq1+(gaq1)*1574. + 0.5*T*de2dq1*smgphi2
@@ -460,18 +279,62 @@ def simulate_ncnp(data_path, initialStep, steps, initT, gradT, dTdt):
         deltaq1 = M_q*(t1-q1*lmbda)
         deltaq4 = M_q*(t4-q4*lmbda)
     
-        #changes in q
-    
-    
+        #check for questionable points if DEBUG
+        if(DEBUG):
+            weirdpoints = np.argwhere(deltaphi[0] > 0.5/dt)
+            for j in range(1, len(phi)):
+                weirdpoints = np.concatenate((weirdpoints, np.argwhere(deltaphi[j] > 0.5/dt)), axis=0)
+            for j in range(len(phi)):
+                weirdpoints = np.concatenate((weirdpoints, np.argwhere(phi[j] > 1.01)), axis=0)
+            for j in range(len(phi)):
+                weirdpoints = np.concatenate((weirdpoints, np.argwhere(phi[j] < -0.01)), axis=0)
+            if(len(weirdpoints) > 0):
+                weirdpoints = np.unique(weirdpoints, axis=0)
+                print("Weird points: ", weirdpoints)
+                weirdpoints = tuple(weirdpoints.T)
+                for j in range(len(phi)):
+                    print("phi["+str(j)+"]: ", phi[j][weirdpoints])
+                for j in range(len(phi)):
+                    for k in range(len(phi)):
+                        print("kij["+str(j)+"]["+str(k)+"]: ", kij[j][k][weirdpoints])
+                for j in range(len(c)):
+                    print("c["+str(j)+"]: ", c[j][weirdpoints])
+                for j in range(len(phi)):
+                    print("deltaphi["+str(j)+"]: ", deltaphi[j][weirdpoints])
+                for j in range(len(phi)):
+                    print("0.5*T*de2dpj["+str(j)+"]*smgphi2: ", (0.5*T*de2dpj[0]*smgphi2)[weirdpoints])
+                for j in range(len(phi)):
+                    print("hp["+str(j)+"]*G["+str(j)+"]/v_m: ", (hp[j]*G[j]/v_m)[weirdpoints])
+                for j in range(len(phi)):
+                    print("dwdpj["+str(j)+"]*g*T: ", (dwdpj[j]*g*T)[weirdpoints])
+                for j in range(len(phi)):
+                    print("w*gp["+str(j)+"]*T: ", (w*gp[j]*T)[weirdpoints])
+                for j in range(len(phi)):
+                    print("H["+str(j)+"]*T*(2*phi["+str(j)+"])*rgqs_0: ", (H[j]*T*(2*phi[j])*rgqs_0)[weirdpoints])
+                for j in range(len(phi)):
+                    print("-utils.vg_ul(0.5*va_T*de2dpxj["+str(j)+"]*vasmgphi2, dim, 0, dx): ", (-utils.vg_ul(0.5*va_T*de2dpxj[j]*vasmgphi2, dim, 0, dx))[weirdpoints])
+                for j in range(len(phi)):
+                    print("-utils.vg_ul(0.5*va_T*de2dpyj["+str(j)+"]*vasmgphi2, dim, 1, dx): ", (-utils.vg_ul(0.5*va_T*de2dpyj[j]*vasmgphi2, dim, 1, dx))[weirdpoints])
+                for j in range(len(phi)):
+                    print("-dTe2dphi["+str(j)+"]: ", (-dTe2dphi[j])[weirdpoints])
     
         #apply changes
         for j in range(len(c)):
+            #print(c)
+            #print(deltac)
             c[j] += deltac[j]*dt
+        
         for j in range(len(phi)):
             phi[j] += deltaphi[j]*dt
+            
+        #apply multiObstacle function to phi, clipping values outside 0 to 1
+        phi = utils.multiObstacle(phi)
+        
         q1 += deltaq1*dt
         q4 += deltaq4*dt
-        utils.applyBCs_nc(phi, c, q1, q4, nbc)
+        
+        #print("phi", phi[0][0])
+        utils.applyBCs_ncnp(phi, c, q1, q4, nbc)
         T += dTdt
         if(i%10 == 0):
             q1, q4 = utils.renormalize(q1, q4)
@@ -483,15 +346,35 @@ def simulate_ncnp(data_path, initialStep, steps, initT, gradT, dTdt):
     
         #This code segment saves the arrays every 500 steps, and adds nuclei
         #note: nuclei are added *before* saving the data, so stray nuclei may be found before evolving the system
+        #***NUCLEATION TEMPORARILY TURNED OFF FOR MULTIORDER TESTING***
         if(step%500 == 0):
             #find the stochastic nucleation critical probabilistic cutoff
             #attn -- Q and T_liq are hard coded parameters for Ni-10%Cu
-            Q0=8*10**5 #activation energy of migration
-            T_liq=1697 #Temperature of Liquidus (K)
-            J0,p11=utils.find_Pn(T_liq, T, Q0, dt) 
+            #Q0=8*10**5 #activation energy of migration
+            #T_liq=1697 #Temperature of Liquidus (K)
+            #J0,p11=utils.find_Pn(T_liq, T, Q0, dt) 
             #print(J0)
-            phi, q1, q4=utils.add_nuclei(phi, q1, q4, p11, len(phi))
-            utils.saveArrays_nc(data_path, step, phi, c, q1, q4)
+            #phi, q1, q4=utils.add_nuclei(phi, q1, q4, p11, len(phi))
+            utils.saveArrays_ncnp(data_path, step, phi, c, q1, q4)
+        if(i == steps-1):
+            utils.saveArrays_ncnp(data_path, step, phi, c, q1, q4)
+        if(DEBUG):
+            print("Maximum value of w", np.max(w))
+            print("Maximum value of G[0]", np.max(G[0]))
+            print("Maximum value of phi noise", np.max(noise_phi))
+            print("Maximum value of 0.5*T*de2dpj[0]*smgphi2", np.max(np.absolute(0.5*T*de2dpj[j]*smgphi2)))
+            print("Maximum value of h'(p_0)*G/v_m", np.max(np.absolute(hp[0]*G[0]/v_m)))
+            print("Maximum value of dw/dp_0 *g*T", np.max(np.absolute(dwdpj[0]*g*T)))
+            print("Maximum value of w*dg/dp_0 *T", np.max(np.absolute(w*gp[0]*T)))
+            print("Maximum value of H(p_0)*T*p/mgq", np.max(np.absolute(H[0]*T*(2*phi[0])*rgqs_0)))
+            print("Maximum value of del x component of dFdphi", np.max(np.absolute(-utils.vg_ul(0.5*va_T*de2dpxj[0]*vasmgphi2, dim, 0, dx))))
+            print("Maximum value of del y component of dFdphi", np.max(np.absolute(-utils.vg_ul(0.5*va_T*de2dpyj[0]*vasmgphi2, dim, 1, dx))))
+            print("Maximum value of dTe2dphi[0]", np.max(np.absolute(-dTe2dphi[0])))
+            print("Maximum value of deltaphi[0]", np.max(np.absolute(deltaphi[0])))
+            if(len(phi) == 2):
+                print("Sum of phi terms (should be one)", np.max(phi[0]+phi[1]))
+            if(len(phi) == 3):
+                print("Sum of phi terms (should be one)", np.max(phi[0]+phi[1]+phi[2]))
 
     print("Done")
 
@@ -510,6 +393,6 @@ if __name__ == '__main__':
         init_tdb_vars(utils.tdb)
         print(L, T_M, S, B)
         print(D_S, D_L, v_m, M_qmax, H, dt, y_e)
-        simulate_nc(data_path, initial_step, steps, init_T, grad_T, dTdt)
+        simulate_ncnp(data_path, initial_step, steps, init_T, grad_T, dTdt)
     else:
         print("Error! Needs exactly 6 additional arguments! (data_path, initial_step, steps, init_T, grad_T, dT/dt)")

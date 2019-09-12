@@ -15,7 +15,7 @@ def preinitialize(sim_type, data_path, tdb_path):
     Returns True if initialization is successful, False if not (folder already exists?)
     """
     utils.load_tdb(tdb_path)
-    if not engine.init_tdb_vars(utils.tdb):
+    if not engine.init_tdb_vars_ncnp(utils.tdb):
         print("This TDB file doesn't have the required additional variables needed to run a phase field simulation!")
         # add required variable names! Important for debugging errors!
         print("Trying to run the simulation won't work!")
@@ -29,7 +29,6 @@ def preinitialize(sim_type, data_path, tdb_path):
     info.write("---Information about this Phase Field Simulation---\n\n")
     info.write("Simulation type: \n"+sim_type+"\n\n")
     info.write("Material Parameters: \n")
-    info.write("    Anisotropy of S-L interfacial energy (y_e): "+str(engine.y_e)+"\n")
     info.write("    TDB File used: "+tdb_path+"\n")
     info.write("  Other: \n")
     info.write("    Interfacial thickness (d): "+str(engine.d)+"\n\n")
@@ -39,8 +38,8 @@ def preinitialize(sim_type, data_path, tdb_path):
     info.write("    Time step (dt): "+str(engine.dt)+"\n\n")
     info.write("Notes: \n")
     info.write("    Components used: "+str(utils.components)+"\n")
+    info.write("    Phases used: "+str(utils.phases)+"\n")
     info.write("    Units are cm, s, J, K, mol\n")
-    info.write("    0 = liquid, 1 = solid, opposite of Warren1995\n\n")
     info.write("Logs of simulation runs: \n\n")
     info.close()
     return True
@@ -238,6 +237,161 @@ def initializeSeed(data_path, tdb_path, lX, lY, nbcX, nbcY, c0=0):
                     
     utils.applyBCs_nc(phi, c, q1, q4, nbc)
     utils.saveArrays_nc(data_path, 0, phi, c, q1, q4)
+    return True
+
+def initializeSeed2p(data_path, tdb_path, lX, lY, nbcX, nbcY, c0=0):
+    """
+    Initializes a simulation with a single seed crystal in the center, of random orientation. 
+    data_path: where the phi, c, q1, and q4 field data will be saved
+    tdb_path: which TDB file will be used to run the simulation
+    lX: Width of simulation region (x-axis)
+    lY: Height of simulation region (y-axis)
+    nbcX: Whether Neumann boundary conditions are used along the x-axis. Otherwise, boundary is periodic 
+    nbcY: Same as above, but for the y-axis. 
+    c0: initial composition array, if c0 = 0, autogenerate composition using equal fractions of each species
+    
+    Returns True if initialization is successful, False if not (folder already exists?)
+    """
+    
+    sim_type = "  Two Seeds:\n    Size: ["+str(lX)+", "+str(lY)+"]\n    Neumann Boundary Conditions: ["+str(nbcX)+", "+str(nbcY)+"]"
+    if not preinitialize(sim_type, data_path, tdb_path):
+        return False
+    
+    nbc = [nbcX, nbcY]
+    shape = []
+    dim = 2
+    seeds = 1
+    if(nbcY):
+        shape.append(lY+2)
+    else:
+        shape.append(lY)
+    if(nbcX):
+        shape.append(lX+2)
+    else:
+        shape.append(lX)
+
+    phi = []
+    phi.append(np.zeros(shape))
+    phi.append(np.zeros(shape))
+    phi[1] += 1.
+    q1 = np.zeros(shape)
+    q4 = np.zeros(shape)
+    q1 += np.cos(0*np.pi/8)
+    q4 += np.sin(0*np.pi/8)
+    c = []
+    if c0 == 0:
+        for i in range(len(utils.components)-1):
+            c_i = np.zeros(shape)
+            c_i += 1./len(utils.components)
+            c.append(c_i)
+    elif(len(c0) == (len(utils.components)-1)):
+        for i in range(len(utils.components)-1):
+            c_i = np.zeros(shape)
+            c_i += c0[i]
+            c.append(c_i)
+    else:
+        print("Mismatch between initial composition array length, and number of components!")
+        print("c array must have "+str(len(utils.components)-1)+" values!")
+        return False
+        
+    randAngle = np.random.rand(seeds)*np.pi/4-np.pi/8
+    randX = [lX/2]
+    randY = [lY/2]
+    for k in range(seeds):
+        for i in range((int)(randY[k]-5), (int)(randY[k]+5)):
+            for j in range((int)(randX[k]-5), (int)(randX[k]+5)):
+                if((i-randY[k])*(i-randY[k])+(j-randX[k])*(j-randX[k]) < 25):
+                    phi[0][i][j] = 1.
+                    phi[1][i][j] = 0.
+                    q1[i][j] = np.cos(randAngle[k])
+                    q4[i][j] = np.sin(randAngle[k])
+                    
+    utils.applyBCs_ncnp(phi, c, q1, q4, nbc)
+    utils.saveArrays_ncnp(data_path, 0, phi, c, q1, q4)
+    return True
+
+def initializeSeed3p(data_path, tdb_path, lX, lY, nbcX, nbcY, c0=0):
+    """
+    Initializes a simulation with two seed crystals, one of each non-liquid phase, of random orientation. 
+    data_path: where the phi, c, q1, and q4 field data will be saved
+    tdb_path: which TDB file will be used to run the simulation
+    lX: Width of simulation region (x-axis)
+    lY: Height of simulation region (y-axis)
+    nbcX: Whether Neumann boundary conditions are used along the x-axis. Otherwise, boundary is periodic 
+    nbcY: Same as above, but for the y-axis. 
+    c0: initial composition array, if c0 = 0, autogenerate composition using equal fractions of each species
+    
+    Returns True if initialization is successful, False if not (folder already exists?)
+    """
+    
+    sim_type = "  Two Seeds:\n    Size: ["+str(lX)+", "+str(lY)+"]\n    Neumann Boundary Conditions: ["+str(nbcX)+", "+str(nbcY)+"]"
+    if not preinitialize(sim_type, data_path, tdb_path):
+        return False
+    
+    nbc = [nbcX, nbcY]
+    shape = []
+    dim = 2
+    seeds = 1
+    if(nbcY):
+        shape.append(lY+2)
+    else:
+        shape.append(lY)
+    if(nbcX):
+        shape.append(lX+2)
+    else:
+        shape.append(lX)
+
+    phi = []
+    phi.append(np.zeros(shape))
+    phi.append(np.zeros(shape))
+    phi.append(np.zeros(shape))
+    phi[2] += 1
+    q1 = np.zeros(shape)
+    q4 = np.zeros(shape)
+    q1 += np.cos(0*np.pi/8)
+    q4 += np.sin(0*np.pi/8)
+    c = []
+    if c0 == 0:
+        for i in range(len(utils.components)-1):
+            c_i = np.zeros(shape)
+            c_i += 1./len(utils.components)
+            c.append(c_i)
+    elif(len(c0) == (len(utils.components)-1)):
+        for i in range(len(utils.components)-1):
+            c_i = np.zeros(shape)
+            c_i += c0[i]
+            c.append(c_i)
+    else:
+        print("Mismatch between initial composition array length, and number of components!")
+        print("c array must have "+str(len(utils.components)-1)+" values!")
+        return False
+        
+    randAngle = np.random.rand(seeds)*np.pi/4-np.pi/8
+    randX = [lX/4]
+    randY = [lY/2]
+    for k in range(seeds):
+        for i in range((int)(randY[k]-5), (int)(randY[k]+5)):
+            for j in range((int)(randX[k]-5), (int)(randX[k]+5)):
+                if((i-randY[k])*(i-randY[k])+(j-randX[k])*(j-randX[k]) < 25):
+                    phi[0][i][j] = 1
+                    phi[2][i][j] = 0
+                    q1[i][j] = np.cos(randAngle[k])
+                    q4[i][j] = np.sin(randAngle[k])
+    
+    randAngle = np.random.rand(seeds)*np.pi/4-np.pi/8
+    randX = [3*lX/4]
+    randY = [lY/2]
+    for k in range(seeds):
+        for i in range((int)(randY[k]-5), (int)(randY[k]+5)):
+            for j in range((int)(randX[k]-5), (int)(randX[k]+5)):
+                if((i-randY[k])*(i-randY[k])+(j-randX[k])*(j-randX[k]) < 25):
+                    phi[1][i][j] = 1
+                    phi[2][i][j] = 0
+                    q1[i][j] = np.cos(randAngle[k])
+                    q4[i][j] = np.sin(randAngle[k])
+                    
+    utils.applyBCs_ncnp(phi, c, q1, q4, nbc)
+    utils.saveArrays_ncnp(data_path, 0, phi, c, q1, q4)
     return True
 
 def initialize1D(data_path, tdb_path, lX, interface, same_ori, num_components, c_a, c_b):
