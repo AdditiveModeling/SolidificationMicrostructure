@@ -1,3 +1,6 @@
+1.2.1:
+Added 1D plots in case one of the dimensions has length 1
+
 1.2:
 Multiorder model works, example simulation in phasefield.ipynb runs a 3 phase, 3 component simulation
 Now requires numpy 1.13! numpy.unique(array, axis=0) function was added in 1.13

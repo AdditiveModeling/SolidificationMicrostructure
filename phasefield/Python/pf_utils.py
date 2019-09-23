@@ -498,11 +498,68 @@ def plotImages_nc(phi, c, q4, nbc, data_path, step):
     cbar = fig.colorbar(cax, ticks=[np.min(q4), np.max(q4)])
     plt.savefig(root_folder+"/data/"+data_path+'/q4_'+str(step)+'.png')
     
-def plotImages_ncnp(phi, c, q4, nbc, data_path, step):
+def plot1d(phi, c, q4, nbc, data_path, step):
+    """
+    Special case of plot2d, where one dimension is only 1 wide.
+    Plots each field w.r.t. the length of the simulation, as a line plot
+    """
+    
+    #first, orient the array so its shape is (1, length)
+    if(coreSection(q4, nbc).shape[1] == 1):
+        q4 = np.transpose(q4)
+        phi = np.transpose(phi, (0, 2, 1))
+        c = np.transpose(c, (0, 2, 1))
+        
+    xaxis = np.linspace(1, coreSection(q4, nbc).shape[1], num = coreSection(q4, nbc).shape[1])-1
+    
+    for i in range(len(phi)):
+        fig, ax = plt.subplots()
+        plt.title('phi_'+phases[i])
+        plt.plot(xaxis, phi[i][0], dashes=[5, 3, i+1, 3], linewidth=i+1, color='red')
+        plt.savefig(root_folder+"/data/"+data_path+'/phi'+str(i+1)+'_'+str(step)+'.png')
+        
+    for i in range(len(c)):
+        fig, ax = plt.subplots()
+        plt.title('c_'+components[i])
+        plt.plot(xaxis, c[i][0], dashes=[5, 3, i+1, 3], linewidth=i+1, color='blue')
+        plt.savefig(root_folder+"/data/"+data_path+'/c'+str(i+1)+'_'+str(step)+'.png')
+    
+    c_N = 1-np.sum(c, axis=0)
+    fig, ax = plt.subplots()
+    plt.title('c_'+components[len(c)])
+    plt.plot(xaxis, c_N[0], dashes=[5, 3, len(c)+1, 3], linewidth=len(c)+1, color='blue')
+    plt.savefig(root_folder+"/data/"+data_path+'/c'+str(len(c)+1)+'_'+str(step)+'.png')
+    fig, ax = plt.subplots()
+    plt.title('q4')
+    plt.plot(xaxis, q4[0], linewidth=1, color='black')
+    plt.savefig(root_folder+"/data/"+data_path+'/q4_'+str(step)+'.png')
+    fig, ax = plt.subplots()
+    plt.title('All Fields')
+    legend = []
+    for i in range(len(phi)):
+        plt.plot(xaxis, phi[i][0], dashes=[5, 3, i+1, 3], linewidth=i+1, color='red')
+        legend.append('phi_'+phases[i])
+    for i in range(len(c)):
+        plt.plot(xaxis, c[i][0], dashes=[5, 3, i+1, 3], linewidth=i+1, color='blue')
+        legend.append('c_'+components[i])
+    plt.plot(xaxis, c_N[0], dashes=[5, 3, len(c)+1, 3], linewidth=len(c)+1, color='blue')
+    legend.append('c_'+components[len(c)])
+    plt.plot(xaxis, np.absolute(q4[0]), linewidth=1, color='black')
+    legend.append('q4')
+    plt.legend(legend, bbox_to_anchor=(1.04,1), loc="upper left")
+    plt.savefig(root_folder+"/data/"+data_path+'/all_'+str(step)+'.png', bbox_inches="tight")
+    
+    
+def plot2d(phi, c, q4, nbc, data_path, step):
     """
     Plots the phi (order), c (composition), and q4 (orientation component) fields for a given step
     Saves images to the defined path
     """
+    
+    if(coreSection(q4, nbc).shape[0] == 1 or coreSection(q4, nbc).shape[1] == 1):
+        plot1d(phi, c, q4, nbc, data_path, step)
+        return
+    
     colors = [(0, 0, 1), (0, 1, 1), (0, 1, 0), (1, 1, 0), (1, 0, 0)]
     cm = LinearSegmentedColormap.from_list('rgb', colors)
     colors2 = [(0, 0, 1), (1, 1, 0), (1, 0, 0)]

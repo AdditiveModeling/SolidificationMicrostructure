@@ -84,7 +84,7 @@ def init_tdb_vars_ncnp(tdb):
             H.append(utils.npvalue(T, "H_"+utils.phases[i], tdb))
             
         eqbar = 0.5*ebar2[0][1] #interfacial orientation term, here we choose an arbitrary interface to be relative to
-        dt = dx*dx/5./np.max(D)/20
+        dt = dx*dx/5./np.max(D)/8
         return True
     except Exception as e:
         print(e)

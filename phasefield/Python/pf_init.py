@@ -369,14 +369,16 @@ def initializeSeed3p(data_path, tdb_path, lX, lY, nbcX, nbcY, c0=0):
     randAngle = np.random.rand(seeds)*np.pi/4-np.pi/8
     randX = [lX/4]
     randY = [lY/2]
+    ysize = q1.shape[0]
+    xsize = q1.shape[1]
     for k in range(seeds):
         for i in range((int)(randY[k]-5), (int)(randY[k]+5)):
             for j in range((int)(randX[k]-5), (int)(randX[k]+5)):
                 if((i-randY[k])*(i-randY[k])+(j-randX[k])*(j-randX[k]) < 25):
-                    phi[0][i][j] = 1
-                    phi[2][i][j] = 0
-                    q1[i][j] = np.cos(randAngle[k])
-                    q4[i][j] = np.sin(randAngle[k])
+                    phi[0][i%ysize][j] = 1
+                    phi[2][i%ysize][j] = 0
+                    q1[i%ysize][j] = np.cos(randAngle[k])
+                    q4[i%ysize][j] = np.sin(randAngle[k])
     
     randAngle = np.random.rand(seeds)*np.pi/4-np.pi/8
     randX = [3*lX/4]
@@ -385,10 +387,10 @@ def initializeSeed3p(data_path, tdb_path, lX, lY, nbcX, nbcY, c0=0):
         for i in range((int)(randY[k]-5), (int)(randY[k]+5)):
             for j in range((int)(randX[k]-5), (int)(randX[k]+5)):
                 if((i-randY[k])*(i-randY[k])+(j-randX[k])*(j-randX[k]) < 25):
-                    phi[1][i][j] = 1
-                    phi[2][i][j] = 0
-                    q1[i][j] = np.cos(randAngle[k])
-                    q4[i][j] = np.sin(randAngle[k])
+                    phi[1][i%ysize][j%xsize] = 1
+                    phi[2][i%ysize][j%xsize] = 0
+                    q1[i%ysize][j%xsize] = np.cos(randAngle[k])
+                    q4[i%ysize][j%xsize] = np.sin(randAngle[k])
                     
     utils.applyBCs_ncnp(phi, c, q1, q4, nbc)
     utils.saveArrays_ncnp(data_path, 0, phi, c, q1, q4)
@@ -451,6 +453,17 @@ def initialize1D(data_path, tdb_path, lX, interface, same_ori, num_components, c
         utils.saveArrays_3c(data_path, 0, phi, c1, c2, q1, q4)
     
     return True
+
+def makeSeed(phi, q1, q4, seedX, seedY, size):
+    xsize = q1.shape[1]
+    ysize = q1.shape[0]
+    for i in range((int)(seedY-5), (int)(seedY+5)):
+            for j in range((int)(seedX-5), (int)(seedX+5)):
+                if((i-seedX)*(i-seedY)+(j-seedX)*(j-seedX) < 25):
+                    phi[1][i%ysize][j%xsize] = 1
+                    phi[2][i%ysize][j%xsize] = 0
+                    q1[i%ysize][j%xsize] = np.cos(randAngle[k])
+                    q4[i%ysize][j%xsize] = np.sin(randAngle[k])
 
 if __name__ == '__main__':
     if len(sys.argv) == 1: #no additional arguments
