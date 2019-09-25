@@ -67,14 +67,14 @@ def compute_tdb_energy_nc(temps, c, phase):
     fec_nc_offset = []
     for i in range(len(c)):
         fec_offset = np.zeros([len(c)+1])
-        fec_offset[i] = 0.0000001
-        fec_offset[len(c)] = -0.0000001
+        fec_offset[i] = 0.000000001
+        fec_offset[len(c)] = -0.000000001
         fec_nc_offset.append(fec_n_comp+fec_offset)
     flattened_t = temps.flatten()
     GM = pyc.calculate(tdb, components, phase, P=101325, T=flattened_t, points=fec_n_comp, broadcast=False).GM.values.reshape(c[0].shape)
     GM_derivs = []
     for i in range(len(c)):
-        GM_derivs.append((pyc.calculate(tdb, components, phase, P=101325, T=flattened_t, points=fec_nc_offset[i], broadcast=False).GM.values.reshape(c[0].shape)-GM)*(10000000.))
+        GM_derivs.append((pyc.calculate(tdb, components, phase, P=101325, T=flattened_t, points=fec_nc_offset[i], broadcast=False).GM.values.reshape(c[0].shape)-GM)*(1000000000.))
     return GM, GM_derivs
 
 def load_tdb(tdb_path):
@@ -204,7 +204,7 @@ def vg_ul(field, dim, direction, dx):
     f = field
     for i in range(dim):
         if(i != direction):
-            f = f + np.roll(f, 1, i)
+            f = 0.5*(f + np.roll(f, 1, i))
     f = (f-np.roll(f, 1, direction))/dx
     return f
 
@@ -655,4 +655,7 @@ def multiObstacle(phi):
         phi[1] = np.where(bools, phi[1]+phi[2]/2, phi[1])
         phi[0] = np.where(bools, phi[0]+phi[2]/2, phi[0])
         phi[2] = np.where(bools, 0, phi[2])
+    if(len(phi) == 2):
+        phi[0] = np.clip(phi[0], 0, 1)
+        phi[1] = np.clip(phi[1], 0, 1)
     return phi

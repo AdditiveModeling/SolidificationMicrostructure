@@ -142,7 +142,12 @@ def simulate_ncnp(data_path, initialStep, steps, initT, gradT, dTdt):
         #compute needed terms
         e2, w, de2dpj, de2dpxj, de2dpyj, dwdpj, de2dq1, de2dq4 = utils.doublesums(phi, q1, q4, ebar2, W, y_e, dx)
         
-        #print(T*e2)
+        va_T = utils.va_br(T, dim)
+        gT = utils.grad(T, dx, dim)
+        va_e2 = utils.va_ul(e2, dim)
+        e2_x = utils.vg_ul(e2, dim, 0, dx)
+        e2_y = utils.vg_ul(e2, dim, 1, dx)
+        
         for j in range(len(phi)):
             h.append(utils._h(phi[j]))
             hp.append(utils._hprime(phi[j]))
@@ -150,11 +155,12 @@ def simulate_ncnp(data_path, initialStep, steps, initT, gradT, dTdt):
             p.append(phi[j]**2)
             gp.append(utils._gprime(phi, j))
             gphi = utils.grad_r(phi[j], dx, dim)
-            smgphi2 += 0.25*((gphi[0]+np.roll(gphi[0], 1, 0))**2)
-            smgphi2 += 0.25*((gphi[1]+np.roll(gphi[1], 1, 1))**2)
+            ccphix = 0.5*(gphi[0]+np.roll(gphi[0], 1, 0))
+            ccphiy = 0.5*(gphi[1]+np.roll(gphi[1], 1, 1))
+            smgphi2 += (ccphix**2 + ccphiy**2)
             vasmgphi2 += 0.25*((gphi[0]+np.roll(gphi[0], -1, 1))**2)
             vasmgphi2 += 0.25*((gphi[1]+np.roll(gphi[1], -1, 0))**2)
-            dTe2dphi.append(T*utils.va_ul(e2, dim)*utils.grad2(phi[j], dx, dim))
+            dTe2dphi.append(T*va_e2*utils.grad2(phi[j], dx, dim) + va_e2*(gT[0]*ccphix + gT[1]*ccphiy) + T*(e2_x*ccphix + e2_y*ccphiy))
             #phi term used for computing mobilities
             phi_m = 0.5*(phi[j] + np.roll(phi[j], 1, 0))
             phi_m = 0.5*(phi_m + np.roll(phi_m, 1, 1))
@@ -182,8 +188,6 @@ def simulate_ncnp(data_path, initialStep, steps, initT, gradT, dTdt):
             for k in range(len(phi)):
                 diag_element += kij[j][k]
             kij[j][j] -= diag_element
-          
-        va_T = utils.va_br(T, dim)
         
         #quaternion gradient terms
         gq1l = utils.grad_l(q1, dx, dim)
@@ -205,7 +209,7 @@ def simulate_ncnp(data_path, initialStep, steps, initT, gradT, dTdt):
         rgqs_0 = np.sqrt(gqs)
     
         #"clip" the grid: if values are smaller than "smallest", set them equal to "smallest"
-        smallest = 1.5
+        smallest = 5000.
         for j in range(dim):
             gqsl[j] = np.clip(gqsl[j], smallest, np.inf)
             gqsr[j] = np.clip(gqsr[j], smallest, np.inf)
@@ -238,7 +242,7 @@ def simulate_ncnp(data_path, initialStep, steps, initT, gradT, dTdt):
             for k in range(len(phi)):
                 temp += h[k]*D[k]
                 temp2 += h[k]*dGdc[k][j]
-            M_c.append(v_m*c[j]*temp/R/1574.)
+            M_c.append(v_m*c[j]*temp/R/T)
             #add the change in noise inside the functional
             dFdc.append(temp2/v_m+noise_c)
         for j in range(len(c)):
@@ -273,8 +277,8 @@ def simulate_ncnp(data_path, initialStep, steps, initT, gradT, dTdt):
         
         lq1 = utils.grad2(q1, dx, dim)
         lq4 = utils.grad2(q4, dx, dim)
-        t1 = eqbar*eqbar*lq1+(gaq1)*1574. + 0.5*T*de2dq1*smgphi2
-        t4 = eqbar*eqbar*lq4+(gaq4)*1574. + 0.5*T*de2dq4*smgphi2
+        t1 = eqbar*eqbar*lq1+(gaq1) + 0.5*T*de2dq1*smgphi2
+        t4 = eqbar*eqbar*lq4+(gaq4) + 0.5*T*de2dq4*smgphi2
         lmbda = (q1*t1+q4*t4)
         deltaq1 = M_q*(t1-q1*lmbda)
         deltaq4 = M_q*(t4-q4*lmbda)
@@ -390,9 +394,7 @@ if __name__ == '__main__':
         dTdt = float(sys.argv[6])
         utils.tdb_path = utils.get_tdb_path_for_sim(data_path)
         utils.load_tdb(utils.tdb_path)
-        init_tdb_vars(utils.tdb)
-        print(L, T_M, S, B)
-        print(D_S, D_L, v_m, M_qmax, H, dt, y_e)
+        init_tdb_vars_ncnp(utils.tdb)
         simulate_ncnp(data_path, initial_step, steps, init_T, grad_T, dTdt)
     else:
         print("Error! Needs exactly 6 additional arguments! (data_path, initial_step, steps, init_T, grad_T, dT/dt)")

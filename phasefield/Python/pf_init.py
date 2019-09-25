@@ -294,7 +294,7 @@ def initializeSeed2p(data_path, tdb_path, lX, lY, nbcX, nbcY, c0=0):
         print("c array must have "+str(len(utils.components)-1)+" values!")
         return False
         
-    randAngle = np.random.rand(seeds)*np.pi/4-np.pi/8
+    randAngle = [np.pi/8]
     randX = [lX/2]
     randY = [lY/2]
     for k in range(seeds):
