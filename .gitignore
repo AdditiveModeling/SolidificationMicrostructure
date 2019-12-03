@@ -35,3 +35,9 @@
 *.vti
 *.dat
 *.[0-9]*
+
+# Compiled python files
+*.pyc
+
+# PyPhaseField data folder
+**/data
