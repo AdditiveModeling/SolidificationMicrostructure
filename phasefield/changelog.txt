@@ -1,3 +1,7 @@
+1.2.2:
+Updated gitignore to properly ignore extraneous files created by phasefield code
+Removed T_input_file_maker, superceded by Jacob's code in the repo
+
 1.2.1:
 Added 1D plots in case one of the dimensions has length 1
 
